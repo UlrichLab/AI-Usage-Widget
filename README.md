@@ -61,8 +61,8 @@ The established Windows entry point remains unchanged. macOS has a separate nati
 
 A prebuilt, Developer ID-signed macOS download is not available yet. Until a
 signed and notarized release is published, use the source-build instructions
-below. The current macOS installation therefore requires full Xcode and a local
-Apple Development certificate.
+below. The normal app build does **not** require Xcode; Xcode and an Apple
+Development certificate are needed only for the optional desktop widget.
 
 ### Windows
 
@@ -102,19 +102,22 @@ chmod +x scripts/macos/install.sh
 ./scripts/macos/install.sh
 ```
 
-Before installation, install full Xcode, sign in under **Xcode > Settings > Accounts**, and create an **Apple Development** certificate.
-
 The installer:
 
-1. checks for Python 3.10+, Tkinter, full Xcode, and a signing certificate,
+1. checks for Python 3.10+ and Tkinter,
 2. creates an isolated build environment inside the repository,
 3. builds a self-contained native macOS application with its own Dock icon,
-4. builds and embeds the signed WidgetKit extension,
-5. creates `~/Applications/AI Usage Widget.app`, registers it with macOS, and opens it.
+4. creates `~/Applications/AI Usage Widget.app`, registers it with macOS, and opens it,
+5. additionally builds and embeds the WidgetKit extension when full Xcode and an Apple Development certificate are available.
 
-The **AI Usage** widget can then be added from macOS **Edit Widgets** in small
-or medium size. The desktop app must be running for fresh usage data; WidgetKit
-keeps the most recent timeline entry between refreshes.
+Without Xcode, all usage views in the normal app remain available; only the
+optional right-side desktop widget is omitted. To add that widget later, install
+full Xcode, sign in under **Xcode > Settings > Accounts**, create an **Apple
+Development** certificate, and run the same installer again.
+
+When available, the **AI Usage** widget can be added from macOS **Edit Widgets**
+in small or medium size. The desktop app must be running for fresh usage data;
+WidgetKit keeps the most recent timeline entry between refreshes.
 
 AI Usage Widget refreshes once at launch and then automatically every five
 minutes while the app remains open. If the app is closed, the desktop widget can
@@ -139,28 +142,27 @@ or CLI must already be installed and signed in for each status you want to see:
 | **Cursor** | Cursor Desktop, signed in to the account whose usage should be displayed. |
 
 The provider apps do not all need to remain open continuously. The **AI Usage
-Widget app itself must remain running** for the desktop widget to receive a new
-snapshot every five minutes.
+Widget app itself must remain running** for the optional desktop widget to
+receive a new snapshot every five minutes.
 
 ## macOS compatibility
 
-The macOS build has a deployment target of macOS 14.0 and uses APIs available on
-Sonoma, Sequoia, and Tahoe. The installer builds natively for the Mac on which it
-is run and derives unique host and widget bundle identifiers from that user's
-Apple Development Team, so a public clone does not depend on the repository
-owner's signing identity.
+The macOS app has a deployment target of macOS 14.0 and uses APIs available on
+Sonoma, Sequoia, and Tahoe. The app-only build works without an Apple developer
+identity. When the optional widget is built, the installer derives unique host
+and widget bundle identifiers from that user's Apple Development Team, so a
+public clone does not depend on the repository owner's signing identity.
 
 The current source has been validated on macOS 15.7.9 with Xcode 26.3, compiled
 successfully against the macOS 26.2 Tahoe SDK, and is tested by CI on both macOS
-and Windows. Full Xcode and a local Apple Development certificate are still
-required because the public repository does not ship a pre-signed, notarized
-binary.
+and Windows. Python is needed only for the source build; Xcode and an Apple
+Development certificate are required only for WidgetKit.
 
 ## Requirements
 
 - Windows 10/11 or macOS 14+
 - Python 3.10+
-- Full Xcode and an Apple Development certificate for the macOS WidgetKit build
+- Full Xcode and an Apple Development certificate only for the optional macOS WidgetKit build
 - A supported, signed-in local provider app or CLI as listed above
 
 ### Claude

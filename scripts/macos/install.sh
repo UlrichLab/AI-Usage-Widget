@@ -40,38 +40,33 @@ if ! python3 -c 'import tkinter' >/dev/null 2>&1; then
     exit 1
 fi
 
+widget_build=false
+sign_identity=""
+bundle_id="com.ulrichlab.ai-usage-widget"
 developer_dir=$(xcode-select -p 2>/dev/null || true)
+
 case "$developer_dir" in
-    *.app/Contents/Developer) ;;
-    *)
-        echo "Full Xcode is required; Command Line Tools alone are not enough."
-        echo "Install Xcode, open it once, then select it with: sudo xcode-select -s /Applications/Xcode.app"
-        exit 1
+    *.app/Contents/Developer)
+        if xcodebuild -version >/dev/null 2>&1 && xcrun --find swiftc >/dev/null 2>&1; then
+            sign_identity=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)
+            if [ -z "$sign_identity" ]; then
+                sign_identity=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)
+            fi
+            sign_team=$(printf '%s' "$sign_identity" | sed -n 's/.*(\([^()]*\))$/\1/p')
+            if [ -n "$sign_team" ]; then
+                widget_build=true
+                bundle_suffix=$(printf '%s' "$sign_team" | tr '[:upper:]' '[:lower:]')
+                bundle_id="com.ulrichlab.ai-usage-widget.$bundle_suffix"
+            fi
+        fi
         ;;
 esac
-if ! xcodebuild -version >/dev/null 2>&1 || ! xcrun --find swiftc >/dev/null 2>&1; then
-    echo "Full Xcode with the macOS SDK is required to build the WidgetKit extension."
-    exit 1
-fi
 
-echo "Building AI Usage Widget as a native macOS app..."
-
-sign_identity=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)
-if [ -z "$sign_identity" ]; then
-    sign_identity=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)
+if [ "$widget_build" = true ]; then
+    echo "Building AI Usage Widget app and WidgetKit extension..."
+else
+    echo "Building AI Usage Widget app only (Xcode and a signing certificate are optional for the desktop widget)."
 fi
-if [ -z "$sign_identity" ]; then
-    echo "No Apple Development or Developer ID Application signing identity was found."
-    echo "Open Xcode > Settings > Accounts, add your Apple Account, then create an Apple Development certificate."
-    exit 1
-fi
-sign_team=$(printf '%s' "$sign_identity" | sed -n 's/.*(\([^()]*\))$/\1/p')
-if [ -z "$sign_team" ]; then
-    echo "Could not determine the Apple Development Team from the signing identity."
-    exit 1
-fi
-bundle_suffix=$(printf '%s' "$sign_team" | tr '[:upper:]' '[:lower:]')
-bundle_id="com.ulrichlab.ai-usage-widget.$bundle_suffix"
 
 mkdir -p "$build_dir" "$applications_dir"
 python3 -m venv "$build_venv"
@@ -80,7 +75,7 @@ python3 -m venv "$build_venv"
 "$build_venv/bin/python" "$repo_dir/packaging/macos/generate_icon.py" "$icon_file"
 
 rm -rf "$dist_dir" "$work_dir"
-"$build_venv/bin/pyinstaller" \
+set -- "$build_venv/bin/pyinstaller" \
     --noconfirm \
     --clean \
     --windowed \
@@ -88,12 +83,16 @@ rm -rf "$dist_dir" "$work_dir"
     --name "AI Usage Widget" \
     --icon "$icon_file" \
     --osx-bundle-identifier "$bundle_id" \
-    --codesign-identity "$sign_identity" \
-    --hidden-import "pystray._darwin" \
+    --hidden-import "pystray._darwin"
+if [ "$widget_build" = true ]; then
+    set -- "$@" --codesign-identity "$sign_identity"
+fi
+set -- "$@" \
     --distpath "$dist_dir" \
     --workpath "$work_dir" \
     --specpath "$build_dir" \
     "$repo_dir/src/ai_usage_widget_macos.py"
+"$@"
 
 built_app="$dist_dir/AI Usage Widget.app"
 /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName AI Usage Widget" "$built_app/Contents/Info.plist"
@@ -106,8 +105,9 @@ fi
 /usr/libexec/PlistBuddy -c "Add :NSPrincipalClass string NSApplication" "$built_app/Contents/Info.plist" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Delete :LSUIElement" "$built_app/Contents/Info.plist" 2>/dev/null || true
 
-rm -rf "$widget_build_dir"
-xcodebuild \
+if [ "$widget_build" = true ]; then
+    rm -rf "$widget_build_dir"
+    xcodebuild \
 	-project "$widget_project" \
 	-scheme AIUsageWidgetHost \
 	-configuration Release \
@@ -117,15 +117,15 @@ xcodebuild \
 	AI_USAGE_BUNDLE_SUFFIX="$bundle_suffix" \
 	CODE_SIGN_IDENTITY="$sign_identity" \
 	build
-# xcodebuild registers its temporary host automatically. Remove that duplicate so
-# WidgetKit only sees the extension inside the app that is actually installed.
-pluginkit -r "$xcode_host_bundle/Contents/PlugIns/AIUsageWidgetExtension.appex" 2>/dev/null || true
-pluginkit -r "$widget_bundle" 2>/dev/null || true
-"$lsregister" -u "$xcode_host_bundle" 2>/dev/null || true
-mkdir -p "$built_app/Contents/PlugIns"
-ditto "$widget_bundle" "$built_app/Contents/PlugIns/AIUsageWidgetExtension.appex"
-
-codesign --force --sign "$sign_identity" "$built_app"
+    # xcodebuild registers its temporary host automatically. Remove that duplicate so
+    # WidgetKit only sees the extension inside the app that is actually installed.
+    pluginkit -r "$xcode_host_bundle/Contents/PlugIns/AIUsageWidgetExtension.appex" 2>/dev/null || true
+    pluginkit -r "$widget_bundle" 2>/dev/null || true
+    "$lsregister" -u "$xcode_host_bundle" 2>/dev/null || true
+    mkdir -p "$built_app/Contents/PlugIns"
+    ditto "$widget_bundle" "$built_app/Contents/PlugIns/AIUsageWidgetExtension.appex"
+    codesign --force --sign "$sign_identity" "$built_app"
+fi
 
 if [ -d "$app_bundle" ]; then
     pluginkit -r "$app_bundle/Contents/PlugIns/AIUsageWidgetExtension.appex" 2>/dev/null || true
@@ -134,11 +134,18 @@ fi
 rm -rf "$app_bundle"
 ditto "$built_app" "$app_bundle"
 xattr -dr com.apple.quarantine "$app_bundle" 2>/dev/null || true
-codesign --verify --deep --strict "$app_bundle"
+if [ "$widget_build" = true ]; then
+    codesign --verify --deep --strict "$app_bundle"
+fi
 
 "$lsregister" -f "$app_bundle"
-pluginkit -a "$app_bundle/Contents/PlugIns/AIUsageWidgetExtension.appex"
+if [ "$widget_build" = true ]; then
+    pluginkit -a "$app_bundle/Contents/PlugIns/AIUsageWidgetExtension.appex"
+fi
 
 echo "Installed successfully: $app_bundle"
+if [ "$widget_build" != true ]; then
+    echo "Desktop widget not installed. Install full Xcode and an Apple Development certificate, then run this installer again to add it."
+fi
 echo "Opening AI Usage Widget..."
 open "$app_bundle"

@@ -28,6 +28,10 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
 
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: python -m pip install -r requirements-macos.txt pyinstaller
+
       - name: Compile application
         run: python -m py_compile src/ai_usage_widget.py
 
@@ -58,3 +62,19 @@ jobs:
           CODE_SIGNING_ALLOWED=NO
           AI_USAGE_BUNDLE_SUFFIX=cicheck
           build
+
+      - name: Build app-only macOS bundle
+        if: runner.os == 'macOS'
+        run: |
+          python packaging/macos/generate_icon.py "${{ runner.temp }}/AIUsageWidget.icns"
+          python -m PyInstaller --noconfirm --clean --windowed --onedir \
+            --name "AI Usage Widget" \
+            --icon "${{ runner.temp }}/AIUsageWidget.icns" \
+            --osx-bundle-identifier com.ulrichlab.ai-usage-widget \
+            --hidden-import pystray._darwin \
+            --distpath "${{ runner.temp }}/ai-usage-widget-dist" \
+            --workpath "${{ runner.temp }}/ai-usage-widget-work" \
+            --specpath "${{ runner.temp }}/ai-usage-widget-spec" \
+            src/ai_usage_widget_macos.py
+          test -d "${{ runner.temp }}/ai-usage-widget-dist/AI Usage Widget.app"
+          test ! -d "${{ runner.temp }}/ai-usage-widget-dist/AI Usage Widget.app/Contents/PlugIns"
