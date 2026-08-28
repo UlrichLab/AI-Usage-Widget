@@ -27,7 +27,7 @@ The Windows app lives in the system tray. On macOS, the app behaves like a norma
     </td>
     <td width="50%" align="center" valign="top">
       <img src="assets/ai-usage-widget-macos-app.jpg" alt="AI Usage Widget app on macOS" width="100%"><br><br>
-      <strong>Widget</strong><br>
+      <strong>Widget (Xcode developer-only view)</strong><br>
       <img src="assets/ai-usage-widget-macos-widget.jpg" alt="AI Usage desktop widget on macOS" width="100%">
     </td>
   </tr>
@@ -56,6 +56,13 @@ The Windows app lives in the system tray. On macOS, the app behaves like a norma
 The established Windows entry point remains unchanged. macOS has a separate native build entry point so its Dock, WidgetKit, Keychain, and Claude Desktop integrations do not change Windows behavior.
 
 ## Installation
+
+### Download for macOS
+
+A prebuilt, Developer ID-signed macOS download is not available yet. Until a
+signed and notarized release is published, use the source-build instructions
+below. The current macOS installation therefore requires full Xcode and a local
+Apple Development certificate.
 
 ### Windows
 
@@ -86,7 +93,7 @@ You can also run the repository copy directly:
 start_ai_usage_widget.bat
 ```
 
-### macOS
+### macOS source build
 
 Clone or download the repository, open Terminal in the repository folder, and run:
 
