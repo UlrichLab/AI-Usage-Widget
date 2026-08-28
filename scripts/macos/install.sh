@@ -11,13 +11,18 @@ build_venv="$build_dir/.venv"
 dist_dir="$build_dir/dist"
 work_dir="$build_dir/work"
 icon_file="$build_dir/AIUsageWidget.icns"
-widget_source_dir="$repo_dir/packaging/macos/widget"
 widget_build_dir="$build_dir/widget"
 widget_project="$repo_dir/packaging/macos/widget-host/AIUsageWidgetHost.xcodeproj"
 widget_derived_data="$widget_build_dir/DerivedData"
 widget_bundle="$widget_derived_data/Build/Products/Release/AIUsageWidgetExtension.appex"
 xcode_host_bundle="$widget_derived_data/Build/Products/Release/AI Usage Widget.app"
 lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+
+macos_major=$(sw_vers -productVersion | cut -d. -f1)
+if [ "$macos_major" -lt 14 ]; then
+    echo "macOS 14 Sonoma or newer is required."
+    exit 1
+fi
 
 if ! command -v python3 >/dev/null 2>&1; then
     echo "Python 3.10 or newer is required. Install it from https://www.python.org/downloads/macos/"
@@ -35,7 +40,16 @@ if ! python3 -c 'import tkinter' >/dev/null 2>&1; then
     exit 1
 fi
 
-if [ ! -d "/Applications/Xcode.app" ] || ! xcrun --find swiftc >/dev/null 2>&1; then
+developer_dir=$(xcode-select -p 2>/dev/null || true)
+case "$developer_dir" in
+    *.app/Contents/Developer) ;;
+    *)
+        echo "Full Xcode is required; Command Line Tools alone are not enough."
+        echo "Install Xcode, open it once, then select it with: sudo xcode-select -s /Applications/Xcode.app"
+        exit 1
+        ;;
+esac
+if ! xcodebuild -version >/dev/null 2>&1 || ! xcrun --find swiftc >/dev/null 2>&1; then
     echo "Full Xcode with the macOS SDK is required to build the WidgetKit extension."
     exit 1
 fi
@@ -56,6 +70,8 @@ if [ -z "$sign_team" ]; then
     echo "Could not determine the Apple Development Team from the signing identity."
     exit 1
 fi
+bundle_suffix=$(printf '%s' "$sign_team" | tr '[:upper:]' '[:lower:]')
+bundle_id="com.ulrichlab.ai-usage-widget.$bundle_suffix"
 
 mkdir -p "$build_dir" "$applications_dir"
 python3 -m venv "$build_venv"
@@ -71,7 +87,7 @@ rm -rf "$dist_dir" "$work_dir"
     --onedir \
     --name "AI Usage Widget" \
     --icon "$icon_file" \
-    --osx-bundle-identifier "com.ulrichlab.ai-usage-widget" \
+    --osx-bundle-identifier "$bundle_id" \
     --codesign-identity "$sign_identity" \
     --hidden-import "pystray._darwin" \
     --distpath "$dist_dir" \
@@ -98,6 +114,7 @@ xcodebuild \
 	-derivedDataPath "$widget_derived_data" \
 	-allowProvisioningUpdates \
 	DEVELOPMENT_TEAM="$sign_team" \
+	AI_USAGE_BUNDLE_SUFFIX="$bundle_suffix" \
 	CODE_SIGN_IDENTITY="$sign_identity" \
 	build
 # xcodebuild registers its temporary host automatically. Remove that duplicate so
@@ -110,9 +127,14 @@ ditto "$widget_bundle" "$built_app/Contents/PlugIns/AIUsageWidgetExtension.appex
 
 codesign --force --sign "$sign_identity" "$built_app"
 
+if [ -d "$app_bundle" ]; then
+    pluginkit -r "$app_bundle/Contents/PlugIns/AIUsageWidgetExtension.appex" 2>/dev/null || true
+    "$lsregister" -u "$app_bundle" 2>/dev/null || true
+fi
 rm -rf "$app_bundle"
 ditto "$built_app" "$app_bundle"
 xattr -dr com.apple.quarantine "$app_bundle" 2>/dev/null || true
+codesign --verify --deep --strict "$app_bundle"
 
 "$lsregister" -f "$app_bundle"
 pluginkit -a "$app_bundle/Contents/PlugIns/AIUsageWidgetExtension.appex"

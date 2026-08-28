@@ -46,3 +46,15 @@ jobs:
           sh -n packaging/macos/ai-usage-widget
           plutil -lint packaging/macos/Info.plist
           plutil -lint packaging/macos/widget/Info.plist
+
+      - name: Build WidgetKit extension
+        if: runner.os == 'macOS'
+        run: >-
+          xcodebuild -quiet
+          -project packaging/macos/widget-host/AIUsageWidgetHost.xcodeproj
+          -scheme AIUsageWidgetHost
+          -configuration Release
+          -derivedDataPath "${{ runner.temp }}/AIUsageWidgetDerivedData"
+          CODE_SIGNING_ALLOWED=NO
+          AI_USAGE_BUNDLE_SUFFIX=cicheck
+          build

@@ -167,12 +167,12 @@
 
 		A10000000000000000000060 /* Project Debug */ = {
 			isa = XCBuildConfiguration;
-			buildSettings = {MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; };
+			buildSettings = {AI_USAGE_BUNDLE_SUFFIX = local; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; };
 			name = Debug;
 		};
 		A10000000000000000000061 /* Project Release */ = {
 			isa = XCBuildConfiguration;
-			buildSettings = {MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; };
+			buildSettings = {AI_USAGE_BUNDLE_SUFFIX = local; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; };
 			name = Release;
 		};
 		A10000000000000000000065 /* Host Debug */ = {
@@ -186,7 +186,7 @@
 				INFOPLIST_KEY_LSUIElement = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.1.4;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ulrichlab.ai-usage-widget;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ulrichlab.ai-usage-widget.$(AI_USAGE_BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "AI Usage Widget";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -204,7 +204,7 @@
 				INFOPLIST_KEY_LSUIElement = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.1.4;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ulrichlab.ai-usage-widget;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ulrichlab.ai-usage-widget.$(AI_USAGE_BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "AI Usage Widget";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -223,7 +223,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.1.4;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ulrichlab.ai-usage-widget.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ulrichlab.ai-usage-widget.$(AI_USAGE_BUNDLE_SUFFIX).widget";
 				PRODUCT_NAME = AIUsageWidgetExtension;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -243,7 +243,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.1.4;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ulrichlab.ai-usage-widget.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ulrichlab.ai-usage-widget.$(AI_USAGE_BUNDLE_SUFFIX).widget";
 				PRODUCT_NAME = AIUsageWidgetExtension;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;

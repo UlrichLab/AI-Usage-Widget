@@ -22,16 +22,16 @@ The Windows app lives in the system tray. On macOS, the app behaves like a norma
     <th>macOS</th>
   </tr>
   <tr>
-    <td align="center"><img src="assets/ai-usage-widget-preview.png" alt="AI Usage Widget on Windows" height="500"></td>
-    <td align="center"><img src="assets/ai-usage-widget-macos-app.jpg" alt="AI Usage Widget app on macOS" height="500"></td>
+    <td width="50%" align="center" valign="top">
+      <img src="assets/ai-usage-widget-preview.png" alt="AI Usage Widget on Windows" width="100%">
+    </td>
+    <td width="50%" align="center" valign="top">
+      <img src="assets/ai-usage-widget-macos-app.jpg" alt="AI Usage Widget app on macOS" width="100%"><br><br>
+      <strong>Widget</strong><br>
+      <img src="assets/ai-usage-widget-macos-widget.jpg" alt="AI Usage desktop widget on macOS" width="100%">
+    </td>
   </tr>
 </table>
-
-### Widget
-
-<p align="center">
-  <img src="assets/ai-usage-widget-macos-widget.jpg" alt="AI Usage desktop widget on macOS" width="560">
-</p>
 
 ## Features
 
@@ -51,7 +51,7 @@ The Windows app lives in the system tray. On macOS, the app behaves like a norma
 ## Platform support
 
 - **Windows 10/11:** stable
-- **macOS 14 or newer:** native app bundle and WidgetKit extension built locally by the installer
+- **macOS 14 Sonoma, macOS 15 Sequoia, and macOS 26 Tahoe:** native app bundle and WidgetKit extension built locally by the installer
 
 The established Windows entry point remains unchanged. macOS has a separate native build entry point so its Dock, WidgetKit, Keychain, and Claude Desktop integrations do not change Windows behavior.
 
@@ -109,18 +109,52 @@ The **AI Usage** widget can then be added from macOS **Edit Widgets** in small
 or medium size. The desktop app must be running for fresh usage data; WidgetKit
 keeps the most recent timeline entry between refreshes.
 
+AI Usage Widget refreshes once at launch and then automatically every five
+minutes while the app remains open. If the app is closed, the desktop widget can
+continue showing its last timeline entry, but that value is no longer guaranteed
+to be current.
+
 Closing the macOS app window quits the app. Launch it again from Finder,
 Spotlight, Launchpad, or the Dock. Use macOS **Keep in Dock** if you want its
 icon to remain there while the app is closed.
 
 If Tkinter is missing, install Python from [python.org](https://www.python.org/downloads/macos/) or install the matching `python-tk` package through Homebrew.
 
+## Data sources and required provider apps
+
+AI Usage Widget does not create separate provider logins. A supported local app
+or CLI must already be installed and signed in for each status you want to see:
+
+| Status | Required local login |
+| --- | --- |
+| **Claude** | Claude Desktop or Claude Code. With Claude Desktop only, open Claude periodically so its local usage cache stays current. |
+| **ChatGPT** | Codex desktop app or Codex CLI, which supplies `~/.codex/auth.json`. The ChatGPT desktop app by itself does not supply this Codex quota login. |
+| **Cursor** | Cursor Desktop, signed in to the account whose usage should be displayed. |
+
+The provider apps do not all need to remain open continuously. The **AI Usage
+Widget app itself must remain running** for the desktop widget to receive a new
+snapshot every five minutes.
+
+## macOS compatibility
+
+The macOS build has a deployment target of macOS 14.0 and uses APIs available on
+Sonoma, Sequoia, and Tahoe. The installer builds natively for the Mac on which it
+is run and derives unique host and widget bundle identifiers from that user's
+Apple Development Team, so a public clone does not depend on the repository
+owner's signing identity.
+
+The current source has been validated on macOS 15.7.9 with Xcode 26.3, compiled
+successfully against the macOS 26.2 Tahoe SDK, and is tested by CI on both macOS
+and Windows. Full Xcode and a local Apple Development certificate are still
+required because the public repository does not ship a pre-signed, notarized
+binary.
+
 ## Requirements
 
 - Windows 10/11 or macOS 14+
 - Python 3.10+
 - Full Xcode and an Apple Development certificate for the macOS WidgetKit build
-- For each provider you want to monitor, its corresponding local app/CLI must already be logged in.
+- A supported, signed-in local provider app or CLI as listed above
 
 ### Claude
 
