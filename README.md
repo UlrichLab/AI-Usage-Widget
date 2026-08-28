@@ -1,21 +1,37 @@
 # AI Usage Widget
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Windows version](https://img.shields.io/badge/Windows-1.0.0-blue)
+![macOS version](https://img.shields.io/badge/macOS-1.1.4-blue)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A compact Windows system-tray and macOS menu-bar widget for monitoring AI subscription and agent usage across:
+A compact Windows system-tray app and native macOS app with a WidgetKit desktop widget for monitoring AI subscription and agent usage across:
 
 - **Claude / Claude Code**
 - **ChatGPT / Codex**
 - **Cursor**
 - **Cursor per-model usage breakdown**
 
-The widget is designed to stay out of the way: it lives in the Windows system tray or macOS menu bar and opens on demand.
+The Windows app lives in the system tray. On macOS, the app behaves like a normal Dock application and can supply an optional desktop widget.
 
 ## Preview
 
-![AI Usage Widget showing Claude, ChatGPT/Codex, and Cursor usage](assets/ai-usage-widget-preview.png)
+<table>
+  <tr>
+    <th>Windows</th>
+    <th>macOS</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="assets/ai-usage-widget-preview.png" alt="AI Usage Widget on Windows" height="500"></td>
+    <td align="center"><img src="assets/ai-usage-widget-macos-app.jpg" alt="AI Usage Widget app on macOS" height="500"></td>
+  </tr>
+</table>
+
+### Widget
+
+<p align="center">
+  <img src="assets/ai-usage-widget-macos-widget.jpg" alt="AI Usage desktop widget on macOS" width="560">
+</p>
 
 ## Features
 
@@ -26,7 +42,8 @@ The widget is designed to stay out of the way: it lives in the Windows system tr
 - Separate Cursor **Cursor Models** and **Other Models** pools
 - Expandable Cursor model table with requests, weighted usage and costs
 - Expandable **Model consumption** view with one bar per Cursor model
-- `AI` system-tray icon
+- `AI` system-tray icon on Windows
+- Native Dock application and WidgetKit widget on macOS
 - Manual refresh and 5-minute auto-refresh
 - Optional always-on-top mode
 - No API keys need to be pasted into the app
@@ -34,9 +51,9 @@ The widget is designed to stay out of the way: it lives in the Windows system tr
 ## Platform support
 
 - **Windows 10/11:** stable
-- **macOS 12 or newer:** beta; the shared application code and installer are available, but the package still needs validation on real Mac hardware
+- **macOS 14 or newer:** native app bundle and WidgetKit extension built locally by the installer
 
-Both platforms use the same application core. Only installation, menu-bar integration, icons, and local provider paths are platform-specific.
+The established Windows entry point remains unchanged. macOS has a separate native build entry point so its Dock, WidgetKit, Keychain, and Claude Desktop integrations do not change Windows behavior.
 
 ## Installation
 
@@ -69,7 +86,7 @@ You can also run the repository copy directly:
 start_ai_usage_widget.bat
 ```
 
-### macOS (beta)
+### macOS
 
 Clone or download the repository, open Terminal in the repository folder, and run:
 
@@ -78,25 +95,38 @@ chmod +x scripts/macos/install.sh
 ./scripts/macos/install.sh
 ```
 
+Before installation, install full Xcode, sign in under **Xcode > Settings > Accounts**, and create an **Apple Development** certificate.
+
 The installer:
 
-1. checks for Python 3.10+ and Tkinter,
-2. creates an isolated Python environment in `~/Library/Application Support/AIUsageWidget`,
-3. installs the required Python dependencies,
-4. creates `~/Applications/AI Usage Widget.app`,
-5. opens the widget in the macOS menu bar.
+1. checks for Python 3.10+, Tkinter, full Xcode, and a signing certificate,
+2. creates an isolated build environment inside the repository,
+3. builds a self-contained native macOS application with its own Dock icon,
+4. builds and embeds the signed WidgetKit extension,
+5. creates `~/Applications/AI Usage Widget.app`, registers it with macOS, and opens it.
+
+The **AI Usage** widget can then be added from macOS **Edit Widgets** in small
+or medium size. The desktop app must be running for fresh usage data; WidgetKit
+keeps the most recent timeline entry between refreshes.
+
+Closing the macOS app window quits the app. Launch it again from Finder,
+Spotlight, Launchpad, or the Dock. Use macOS **Keep in Dock** if you want its
+icon to remain there while the app is closed.
 
 If Tkinter is missing, install Python from [python.org](https://www.python.org/downloads/macos/) or install the matching `python-tk` package through Homebrew.
 
 ## Requirements
 
-- Windows 10/11 or macOS 12+
+- Windows 10/11 or macOS 14+
 - Python 3.10+
+- Full Xcode and an Apple Development certificate for the macOS WidgetKit build
 - For each provider you want to monitor, its corresponding local app/CLI must already be logged in.
 
 ### Claude
 
-The app uses the existing Claude Code OAuth credentials stored by Claude Code.
+On macOS, the app first uses the existing Claude Code OAuth credentials from the
+macOS Keychain. If Claude Code is not installed, it can fall back to the current,
+non-sensitive usage cache written by the signed-in Claude Desktop app.
 
 Typical location:
 
@@ -104,7 +134,11 @@ Typical location:
 %USERPROFILE%\.claude\.credentials.json
 ```
 
-It can show normal 5h/7d limits when exposed by Anthropic. For accounts using **Extra Usage**, it displays used/remaining budget. Some Extra Usage account types do not expose a reset timestamp; in that case the widget explicitly says that the reset is not reported.
+Claude Desktop-only users should open Claude Desktop periodically so its local
+usage cache remains current. The app can show normal 5h/7d limits when exposed
+by Anthropic. For accounts using **Extra Usage**, it displays used and remaining
+budget. When Anthropic does not expose a reset timestamp, the widget says that
+the provider did not report one instead of estimating a date.
 
 ### ChatGPT / Codex
 
@@ -150,7 +184,7 @@ means model A accounts for approximately 41% of the captured weighted usage.
 
 AI Usage Widget does not ask you to paste API keys into the UI.
 
-It reads the local authentication state already created by the installed provider tools and queries their usage endpoints.
+It reads the local authentication state already created by the installed provider tools and queries their usage endpoints. The macOS desktop-widget bridge exposes only usage percentages on `127.0.0.1`; it does not expose authentication tokens.
 
 No telemetry is intentionally collected by this project.
 
@@ -181,7 +215,8 @@ chmod +x scripts/macos/uninstall.sh
 
 ## Version
 
-Current release: **1.0.0**
+- Windows: **1.0.0**
+- macOS: **1.1.4**
 
 ## License
 

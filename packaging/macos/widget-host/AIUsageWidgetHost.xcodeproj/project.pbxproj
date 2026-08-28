@@ -1,0 +1,274 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 77;
+	objects = {
+
+		A10000000000000000000001 /* AIUsageWidgetHostApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* AIUsageWidgetHostApp.swift */; };
+		A10000000000000000000002 /* AIUsageWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* AIUsageWidget.swift */; };
+		A10000000000000000000003 /* AIUsageWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* AIUsageWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000004 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* WidgetKit.framework */; };
+		A10000000000000000000005 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000000000000000000014 /* SwiftUI.framework */; };
+
+		A10000000000000000000010 = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000050 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000041;
+			remoteInfo = AIUsageWidgetExtension;
+		};
+
+		A10000000000000000000011 /* AIUsageWidgetHostApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsageWidgetHostApp.swift; sourceTree = "<group>"; };
+		A10000000000000000000012 /* AIUsageWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AIUsageWidget.swift; path = ../widget/AIUsageWidget.swift; sourceTree = SOURCE_ROOT; };
+		A10000000000000000000013 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		A10000000000000000000014 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		A10000000000000000000015 /* AIUsageWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AIUsageWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000016 /* AI Usage Widget.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "AI Usage Widget.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+
+		A10000000000000000000020 = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000021 /* AIUsageWidgetHost */,
+				A10000000000000000000022 /* Widget Extension */,
+				A10000000000000000000023 /* Frameworks */,
+				A10000000000000000000024 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A10000000000000000000021 /* AIUsageWidgetHost */ = {
+			isa = PBXGroup;
+			children = (A10000000000000000000011 /* AIUsageWidgetHostApp.swift */, );
+			path = AIUsageWidgetHost;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000022 /* Widget Extension */ = {
+			isa = PBXGroup;
+			children = (A10000000000000000000012 /* AIUsageWidget.swift */, );
+			name = "Widget Extension";
+			sourceTree = "<group>";
+		};
+		A10000000000000000000023 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000013 /* WidgetKit.framework */,
+				A10000000000000000000014 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000024 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000016 /* AI Usage Widget.app */,
+				A10000000000000000000015 /* AIUsageWidgetExtension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+
+		A10000000000000000000030 /* Host Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (A10000000000000000000001 /* AIUsageWidgetHostApp.swift in Sources */, );
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000031 /* Extension Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (A10000000000000000000002 /* AIUsageWidget.swift in Sources */, );
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000032 /* Host Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000033 /* Extension Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000004 /* WidgetKit.framework in Frameworks */,
+				A10000000000000000000005 /* SwiftUI.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000034 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (A10000000000000000000003 /* AIUsageWidgetExtension.appex in Embed App Extensions */, );
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
+		A10000000000000000000040 /* AIUsageWidgetHost */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000063;
+			buildPhases = (
+				A10000000000000000000030 /* Host Sources */,
+				A10000000000000000000032 /* Host Frameworks */,
+				A10000000000000000000034 /* Embed App Extensions */,
+			);
+			buildRules = ();
+			dependencies = (A10000000000000000000042 /* PBXTargetDependency */, );
+			name = AIUsageWidgetHost;
+			productName = "AI Usage Widget";
+			productReference = A10000000000000000000016 /* AI Usage Widget.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A10000000000000000000041 /* AIUsageWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000064;
+			buildPhases = (
+				A10000000000000000000031 /* Extension Sources */,
+				A10000000000000000000033 /* Extension Frameworks */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = AIUsageWidgetExtension;
+			productName = AIUsageWidgetExtension;
+			productReference = A10000000000000000000015 /* AIUsageWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		A10000000000000000000042 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000041 /* AIUsageWidgetExtension */;
+			targetProxy = A10000000000000000000010 /* PBXContainerItemProxy */;
+		};
+
+		A10000000000000000000050 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2630;
+				LastUpgradeCheck = 2630;
+				TargetAttributes = {
+					A10000000000000000000040 = {CreatedOnToolsVersion = 26.3; };
+					A10000000000000000000041 = {CreatedOnToolsVersion = 26.3; };
+				};
+			};
+			buildConfigurationList = A10000000000000000000062;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base, );
+			mainGroup = A10000000000000000000020;
+			productRefGroup = A10000000000000000000024 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A10000000000000000000040 /* AIUsageWidgetHost */,
+				A10000000000000000000041 /* AIUsageWidgetExtension */,
+			);
+		};
+
+		A10000000000000000000060 /* Project Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; };
+			name = Debug;
+		};
+		A10000000000000000000061 /* Project Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; };
+			name = Release;
+		};
+		A10000000000000000000065 /* Host Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "AI Usage Widget";
+				INFOPLIST_KEY_LSUIElement = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ulrichlab.ai-usage-widget;
+				PRODUCT_NAME = "AI Usage Widget";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A10000000000000000000066 /* Host Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "AI Usage Widget";
+				INFOPLIST_KEY_LSUIElement = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ulrichlab.ai-usage-widget;
+				PRODUCT_NAME = "AI Usage Widget";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A10000000000000000000067 /* Extension Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ../widget/AIUsageWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ../widget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ulrichlab.ai-usage-widget.widget;
+				PRODUCT_NAME = AIUsageWidgetExtension;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A10000000000000000000068 /* Extension Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ../widget/AIUsageWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ../widget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ulrichlab.ai-usage-widget.widget;
+				PRODUCT_NAME = AIUsageWidgetExtension;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A10000000000000000000062 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (A10000000000000000000060, A10000000000000000000061, );
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000000000000000000063 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (A10000000000000000000065, A10000000000000000000066, );
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000000000000000000064 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (A10000000000000000000067, A10000000000000000000068, );
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+	};
+	rootObject = A10000000000000000000050 /* Project object */;
+}

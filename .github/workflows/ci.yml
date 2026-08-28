@@ -31,6 +31,10 @@ jobs:
       - name: Compile application
         run: python -m py_compile src/ai_usage_widget.py
 
+      - name: Compile macOS application
+        if: runner.os == 'macOS'
+        run: python -m py_compile src/ai_usage_widget_macos.py
+
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
@@ -41,3 +45,4 @@ jobs:
           sh -n scripts/macos/uninstall.sh
           sh -n packaging/macos/ai-usage-widget
           plutil -lint packaging/macos/Info.plist
+          plutil -lint packaging/macos/widget/Info.plist
