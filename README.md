@@ -11,6 +11,10 @@ A compact Windows system-tray widget for monitoring AI subscription and agent us
 
 The widget is designed to stay out of the way: it lives in the Windows system tray and opens on demand.
 
+## Preview
+
+![AI Usage Widget showing Claude, ChatGPT/Codex, and Cursor usage](assets/ai-usage-widget-preview.png)
+
 ## Features
 
 - Remaining and consumed usage shown together
