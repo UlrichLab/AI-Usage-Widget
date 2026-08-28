@@ -1,15 +1,17 @@
 # AI Usage Widget
 
-**Version 1.0.0**
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-A compact Windows system-tray widget for monitoring AI subscription and agent usage across:
+A compact Windows system-tray and macOS menu-bar widget for monitoring AI subscription and agent usage across:
 
 - **Claude / Claude Code**
 - **ChatGPT / Codex**
 - **Cursor**
 - **Cursor per-model usage breakdown**
 
-The widget is designed to stay out of the way: it lives in the Windows system tray and opens on demand.
+The widget is designed to stay out of the way: it lives in the Windows system tray or macOS menu bar and opens on demand.
 
 ## Preview
 
@@ -29,9 +31,18 @@ The widget is designed to stay out of the way: it lives in the Windows system tr
 - Optional always-on-top mode
 - No API keys need to be pasted into the app
 
-## Windows installation
+## Platform support
 
-### Recommended
+- **Windows 10/11:** stable
+- **macOS 12 or newer:** beta; the shared application code and installer are available, but the package still needs validation on real Mac hardware
+
+Both platforms use the same application core. Only installation, menu-bar integration, icons, and local provider paths are platform-specific.
+
+## Installation
+
+### Windows
+
+#### Recommended
 
 Download or clone the repository, then open PowerShell in the repository folder:
 
@@ -50,7 +61,7 @@ The installer:
 
 After installation, search for **AI Usage Widget** in the Windows Start menu.
 
-### Portable start
+#### Portable start
 
 You can also run the repository copy directly:
 
@@ -58,9 +69,28 @@ You can also run the repository copy directly:
 start_ai_usage_widget.bat
 ```
 
+### macOS (beta)
+
+Clone or download the repository, open Terminal in the repository folder, and run:
+
+```bash
+chmod +x scripts/macos/install.sh
+./scripts/macos/install.sh
+```
+
+The installer:
+
+1. checks for Python 3.10+ and Tkinter,
+2. creates an isolated Python environment in `~/Library/Application Support/AIUsageWidget`,
+3. installs the required Python dependencies,
+4. creates `~/Applications/AI Usage Widget.app`,
+5. opens the widget in the macOS menu bar.
+
+If Tkinter is missing, install Python from [python.org](https://www.python.org/downloads/macos/) or install the matching `python-tk` package through Homebrew.
+
 ## Requirements
 
-- Windows 10 or Windows 11
+- Windows 10/11 or macOS 12+
 - Python 3.10+
 - For each provider you want to monitor, its corresponding local app/CLI must already be logged in.
 
@@ -132,10 +162,21 @@ If an upstream service changes its response format, a future widget update may b
 
 ## Uninstall
 
+### Windows
+
 From the cloned/downloaded repository:
 
 ```powershell
 .\uninstall.ps1
+```
+
+### macOS
+
+From the cloned/downloaded repository:
+
+```bash
+chmod +x scripts/macos/uninstall.sh
+./scripts/macos/uninstall.sh
 ```
 
 ## Version

@@ -1,0 +1,6 @@
+#!/bin/sh
+
+set -eu
+
+install_dir="$HOME/Library/Application Support/AIUsageWidget"
+exec "$install_dir/.venv/bin/python" "$install_dir/src/ai_usage_widget.py"

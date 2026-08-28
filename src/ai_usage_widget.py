@@ -1,5 +1,5 @@
 
-import json, os, time, threading, urllib.request, urllib.error, base64, sqlite3
+import json, os, sys, time, threading, urllib.request, urllib.error, base64, sqlite3
 from pathlib import Path
 from datetime import datetime, timezone
 import tkinter as tk
@@ -110,8 +110,18 @@ def get_codex():
     email=jwt_payload(iid).get("email") if iid else None
     return {"status":"ok","label":"Wochenlimit" if a["label"]=="7d" else "5h-Limit","used":a["used"],"reset":a["reset"],"email":email}
 
+def cursor_db_path(platform_name=None, env=None, home=None):
+    platform_name=platform_name or sys.platform
+    env=os.environ if env is None else env
+    home=Path.home() if home is None else Path(home)
+    if platform_name=="darwin":
+        return home/"Library"/"Application Support"/"Cursor"/"User"/"globalStorage"/"state.vscdb"
+    appdata=env.get("APPDATA")
+    base=Path(appdata) if appdata else home/"AppData"/"Roaming"
+    return base/"Cursor"/"User"/"globalStorage"/"state.vscdb"
+
 def cursor_session():
-    db=Path(os.environ.get("APPDATA",""))/"Cursor"/"User"/"globalStorage"/"state.vscdb"
+    db=cursor_db_path()
     con=sqlite3.connect(f"file:{db}?mode=ro",uri=True,timeout=2)
     row=con.execute("SELECT value FROM ItemTable WHERE key=?",("cursorAuth/accessToken",)).fetchone()
     con.close()
@@ -384,7 +394,7 @@ class App:
         img=Image.new("RGBA",(64,64),(20,22,28,255))
         d=ImageDraw.Draw(img)
         d.rounded_rectangle((3,3,61,61),12,fill=(20,22,28,255),outline=(255,255,255,255),width=3)
-        # Large, high-contrast AI letters that remain legible in the Windows tray.
+        # Large, high-contrast AI letters that remain legible in a tray or menu bar.
         try:
             from PIL import ImageFont
             font=ImageFont.truetype("arialbd.ttf",28)
@@ -396,7 +406,12 @@ class App:
         d.text(((64-tw)/2,(64-th)/2-2),text,fill=(255,255,255,255),font=font)
         menu=pystray.Menu(pystray.MenuItem("Anzeigen / Ausblenden",self.toggle,default=True),pystray.MenuItem("Jetzt aktualisieren",self.refresh),
                          pystray.MenuItem("Always on top",self.topmost,checked=lambda i:bool(self.root.attributes("-topmost"))),pystray.Menu.SEPARATOR,pystray.MenuItem("Beenden",self.quit))
-        self.tray=pystray.Icon("ai_usage_v9",img,"AI Usage",menu); threading.Thread(target=self.tray.run,daemon=True).start()
+        self.tray=pystray.Icon("ai_usage_v9",img,"AI Usage",menu)
+        if sys.platform=="darwin":
+            # The native macOS backend must be attached from the main thread.
+            self.tray.run_detached()
+        else:
+            threading.Thread(target=self.tray.run,daemon=True).start()
     def toggle(self,*_):self.root.after(0,self._toggle)
     def _toggle(self):
         if self.root.state()=="withdrawn":self.place_bottom_right();self.root.deiconify();self.root.lift()
