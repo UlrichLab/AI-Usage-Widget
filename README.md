@@ -55,97 +55,106 @@ The Windows app lives in the system tray. On macOS, the app behaves like a norma
 
 The established Windows entry point remains unchanged. macOS has a separate native build entry point so its Dock, WidgetKit, Keychain, and Claude Desktop integrations do not change Windows behavior.
 
-## Installation
+## Installation overview
 
-Choose the matching guide in [`platforms/`](platforms/README.md):
+The platform versions and their detailed guides are kept separate:
 
-| Version | Xcode required | Guide |
+| Version | Xcode required | Detailed guide |
 | --- | --- | --- |
 | Windows | No | [`platforms/windows`](platforms/windows/README.md) |
 | macOS app | No | [`platforms/macos-app`](platforms/macos-app/README.md) |
 | macOS app + desktop widget | Yes | [`platforms/macos-widget-developer`](platforms/macos-widget-developer/README.md) |
 
-### Download for macOS
+## Windows installation — step by step
 
-A prebuilt, Developer ID-signed macOS download is not available yet. Until a
-signed and notarized release is published, use the source-build instructions
-below. The normal app build does **not** require Xcode; Xcode and an Apple
-Development certificate are needed only for the optional desktop widget.
+**Requirements:** Windows 10 or 11 and PowerShell. The app needs Python 3.10 or
+newer, but in the normal installation you do not have to install Python first.
+If Python is missing, `install.ps1` automatically installs Python 3.13 through
+Windows Package Manager (`winget`). If `winget` is unavailable, install Python
+manually from [python.org](https://www.python.org/downloads/windows/), reopen
+PowerShell, and repeat the installation.
 
-### Windows
+1. Download the repository with **Code > Download ZIP** and extract the ZIP, or
+   clone the repository with Git.
+2. Open the extracted **AI-Usage-Widget** folder in File Explorer.
+3. Right-click an empty area in the folder and choose **Open in Terminal**, then
+   make sure the terminal is using PowerShell.
+4. Run these commands:
 
-#### Recommended
+   ```powershell
+   Set-ExecutionPolicy -Scope Process Bypass
+   .\install.ps1
+   ```
 
-Download or clone the repository, then open PowerShell in the repository folder:
+5. Wait until the installer reports that installation is complete.
+6. Open the Windows Start menu, search for **AI Usage Widget**, and start it.
+   The `AI` icon then appears in the system tray.
 
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\install.ps1
-```
+During these steps, the installer checks Python, installs missing Python through
+`winget` where possible, installs the required Python packages, copies the app
+to `%LOCALAPPDATA%\AIUsageWidget`, and creates the Start menu shortcut.
 
-The installer:
+For a portable start without installation, double-click
+`start_ai_usage_widget.bat` in the repository folder. Python and the packages
+from `requirements.txt` must already be installed for this method.
 
-1. detects Python,
-2. can install Python through `winget` when Python is missing,
-3. installs the small Python dependencies,
-4. copies the app to `%LOCALAPPDATA%\AIUsageWidget`,
-5. creates an **AI Usage Widget** Start Menu shortcut.
+---
 
-After installation, search for **AI Usage Widget** in the Windows Start menu.
+## macOS installation — step by step (no Xcode)
 
-#### Portable start
+A prebuilt, Developer ID-signed macOS download is not available yet. The normal
+macOS app can nevertheless be built and installed locally without Xcode or an
+Apple Developer membership. Only the optional right-side desktop widget needs
+Xcode.
 
-You can also run the repository copy directly:
+**Requirements:** macOS 14 or newer, Terminal, and Python 3.10 or newer with
+Tkinter. The following instructions install Python and Tkinter through Homebrew.
+If Homebrew is unavailable, install a current Python package with Tkinter from
+[python.org](https://www.python.org/downloads/macos/) and skip step 3.
 
-```text
-start_ai_usage_widget.bat
-```
+1. Download the repository with **Code > Download ZIP** and extract the ZIP, or
+   clone the repository with Git.
+2. Open Terminal, type `cd ` including the trailing space, drag the extracted
+   repository folder into the Terminal window, and press Return.
+3. Install Python and Tkinter:
 
-### macOS source build
+   ```bash
+   brew install python@3.14 python-tk@3.14
+   ```
 
-Clone or download the repository, open Terminal in the repository folder, and run:
+4. Build and install the normal macOS app:
 
-```bash
-brew install python@3.14 python-tk@3.14
-chmod +x scripts/macos/install.sh
-./scripts/macos/install.sh --app-only
-```
+   ```bash
+   chmod +x scripts/macos/install.sh
+   ./scripts/macos/install.sh --app-only
+   ```
 
-The first command installs Python and Tkinter through Homebrew. If Homebrew is
-not installed, install a current Python package with Tkinter from
-[python.org](https://www.python.org/downloads/macos/) instead.
+5. After the build finishes, **AI Usage Widget.app** is installed in
+   `~/Applications`, registered with macOS, and opened automatically. You can
+   reopen it through Finder, Spotlight, Launchpad, or the Dock.
 
-The installer:
+This app-only version includes the Claude, ChatGPT, and Cursor status views,
+manual refresh, and automatic refresh every five minutes. It omits only the
+optional WidgetKit view on the right side of the macOS desktop.
 
-1. checks for Python 3.10+ and Tkinter,
-2. creates an isolated build environment inside the repository,
-3. builds a self-contained native macOS application with its own Dock icon,
-4. creates `~/Applications/AI Usage Widget.app`, registers it with macOS, and opens it,
-5. additionally builds and embeds the WidgetKit extension when full Xcode and an Apple Development certificate are available.
+### Optional macOS desktop widget (Xcode developer-only view)
 
-Without Xcode, all usage views in the normal app remain available; only the
-optional right-side desktop widget is omitted. To add that widget later, install
-full Xcode, sign in under **Xcode > Settings > Accounts**, create an **Apple
-Development** certificate, and run:
+To add the right-side **AI Usage** desktop widget, install full Xcode, sign in
+under **Xcode > Settings > Accounts**, and create an **Apple Development**
+certificate. Then open Terminal in the repository folder and run:
 
 ```bash
 ./scripts/macos/install.sh --with-widget
 ```
 
-When available, the **AI Usage** widget can be added from macOS **Edit Widgets**
-in small or medium size. The desktop app must be running for fresh usage data;
-WidgetKit keeps the most recent timeline entry between refreshes.
+After installation, use macOS **Edit Widgets**, search for **AI Usage**, and add
+the small or medium widget. The AI Usage Widget app must remain running for new
+usage snapshots every five minutes. If the app is closed, WidgetKit may continue
+showing its most recent entry, but that value is no longer guaranteed to be
+current.
 
-AI Usage Widget refreshes once at launch and then automatically every five
-minutes while the app remains open. If the app is closed, the desktop widget can
-continue showing its last timeline entry, but that value is no longer guaranteed
-to be current.
-
-Closing the macOS app window quits the app. Launch it again from Finder,
-Spotlight, Launchpad, or the Dock. Use macOS **Keep in Dock** if you want its
-icon to remain there while the app is closed.
-
-If Tkinter is missing, install Python from [python.org](https://www.python.org/downloads/macos/) or install the matching `python-tk` package through Homebrew.
+Closing the macOS app window quits the app. Use **Keep in Dock** if you want its
+icon to remain in the Dock while the app is closed.
 
 ## Data sources and required provider apps
 

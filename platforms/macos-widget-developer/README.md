@@ -1,4 +1,4 @@
-# macOS app + WidgetKit desktop widget — developer build
+# macOS app + WidgetKit desktop widget — developer-only build
 
 This installs the normal macOS app and additionally embeds the WidgetKit view
 shown in the macOS widget gallery.
@@ -10,13 +10,22 @@ Requirements:
 - An Apple Development certificate
 - Python 3.10+ with Tkinter
 
-Run from Terminal in the repository root:
+Complete the following steps:
 
-```bash
-brew install python@3.14 python-tk@3.14
-chmod +x scripts/macos/install.sh
-./scripts/macos/install.sh --with-widget
-```
+1. Download and extract or clone the repository.
+2. Add your Apple Account under **Xcode > Settings > Accounts** and create an
+   **Apple Development** certificate.
+3. Open Terminal in the repository root.
+4. Run:
+
+   ```bash
+   brew install python@3.14 python-tk@3.14
+   chmod +x scripts/macos/install.sh
+   ./scripts/macos/install.sh --with-widget
+   ```
+
+5. Open macOS **Edit Widgets**, search for **AI Usage**, and add the small or
+   medium widget.
 
 The command stops with a clear message when Xcode or the signing certificate is
 missing; it does not silently replace the requested developer build with the
