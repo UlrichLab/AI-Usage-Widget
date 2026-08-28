@@ -2,6 +2,21 @@
 
 set -eu
 
+install_mode="auto"
+case "${1:-}" in
+    "") ;;
+    --app-only) install_mode="app" ;;
+    --with-widget) install_mode="widget" ;;
+    *)
+        echo "Usage: $0 [--app-only | --with-widget]"
+        exit 2
+        ;;
+esac
+if [ "$#" -gt 1 ]; then
+    echo "Usage: $0 [--app-only | --with-widget]"
+    exit 2
+fi
+
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 applications_dir="$HOME/Applications"
@@ -45,22 +60,30 @@ sign_identity=""
 bundle_id="com.ulrichlab.ai-usage-widget"
 developer_dir=$(xcode-select -p 2>/dev/null || true)
 
-case "$developer_dir" in
-    *.app/Contents/Developer)
-        if xcodebuild -version >/dev/null 2>&1 && xcrun --find swiftc >/dev/null 2>&1; then
-            sign_identity=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)
-            if [ -z "$sign_identity" ]; then
-                sign_identity=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)
+if [ "$install_mode" != "app" ]; then
+    case "$developer_dir" in
+        *.app/Contents/Developer)
+            if xcodebuild -version >/dev/null 2>&1 && xcrun --find swiftc >/dev/null 2>&1; then
+                sign_identity=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)
+                if [ -z "$sign_identity" ]; then
+                    sign_identity=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)
+                fi
+                sign_team=$(printf '%s' "$sign_identity" | sed -n 's/.*(\([^()]*\))$/\1/p')
+                if [ -n "$sign_team" ]; then
+                    widget_build=true
+                    bundle_suffix=$(printf '%s' "$sign_team" | tr '[:upper:]' '[:lower:]')
+                    bundle_id="com.ulrichlab.ai-usage-widget.$bundle_suffix"
+                fi
             fi
-            sign_team=$(printf '%s' "$sign_identity" | sed -n 's/.*(\([^()]*\))$/\1/p')
-            if [ -n "$sign_team" ]; then
-                widget_build=true
-                bundle_suffix=$(printf '%s' "$sign_team" | tr '[:upper:]' '[:lower:]')
-                bundle_id="com.ulrichlab.ai-usage-widget.$bundle_suffix"
-            fi
-        fi
-        ;;
-esac
+            ;;
+    esac
+fi
+
+if [ "$install_mode" = "widget" ] && [ "$widget_build" != true ]; then
+    echo "The developer widget build requires full Xcode and an Apple Development certificate."
+    echo "Open Xcode > Settings > Accounts, add your Apple Account, create the certificate, and try again."
+    exit 1
+fi
 
 if [ "$widget_build" = true ]; then
     echo "Building AI Usage Widget app and WidgetKit extension..."

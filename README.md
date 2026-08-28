@@ -57,6 +57,14 @@ The established Windows entry point remains unchanged. macOS has a separate nati
 
 ## Installation
 
+Choose the matching guide in [`platforms/`](platforms/README.md):
+
+| Version | Xcode required | Guide |
+| --- | --- | --- |
+| Windows | No | [`platforms/windows`](platforms/windows/README.md) |
+| macOS app | No | [`platforms/macos-app`](platforms/macos-app/README.md) |
+| macOS app + desktop widget | Yes | [`platforms/macos-widget-developer`](platforms/macos-widget-developer/README.md) |
+
 ### Download for macOS
 
 A prebuilt, Developer ID-signed macOS download is not available yet. Until a
@@ -98,9 +106,14 @@ start_ai_usage_widget.bat
 Clone or download the repository, open Terminal in the repository folder, and run:
 
 ```bash
+brew install python@3.14 python-tk@3.14
 chmod +x scripts/macos/install.sh
-./scripts/macos/install.sh
+./scripts/macos/install.sh --app-only
 ```
+
+The first command installs Python and Tkinter through Homebrew. If Homebrew is
+not installed, install a current Python package with Tkinter from
+[python.org](https://www.python.org/downloads/macos/) instead.
 
 The installer:
 
@@ -113,7 +126,11 @@ The installer:
 Without Xcode, all usage views in the normal app remain available; only the
 optional right-side desktop widget is omitted. To add that widget later, install
 full Xcode, sign in under **Xcode > Settings > Accounts**, create an **Apple
-Development** certificate, and run the same installer again.
+Development** certificate, and run:
+
+```bash
+./scripts/macos/install.sh --with-widget
+```
 
 When available, the **AI Usage** widget can be added from macOS **Edit Widgets**
 in small or medium size. The desktop app must be running for fresh usage data;
