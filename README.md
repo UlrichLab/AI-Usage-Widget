@@ -134,8 +134,8 @@ If Homebrew is unavailable, install a current Python package with Tkinter from
    reopen it through Finder, Spotlight, Launchpad, or the Dock.
 
 This app-only version includes the Claude, ChatGPT, and Cursor status views,
-manual refresh, and automatic refresh every five minutes. It omits only the
-optional WidgetKit view on the right side of the macOS desktop.
+manual refresh, and automatic refresh every five minutes. The only feature not
+included is the optional WidgetKit desktop widget.
 
 ### Optional macOS desktop widget (Xcode developer-only view)
 

@@ -1,7 +1,7 @@
 # macOS app — step-by-step installation without Xcode
 
 This installs the normal Dock application with the Claude, ChatGPT, and Cursor
-views. Only the optional desktop WidgetKit view is omitted.
+views. The only feature not included is the optional WidgetKit desktop widget.
 
 ## Requirements
 
