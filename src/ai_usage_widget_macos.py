@@ -7,12 +7,25 @@ import tkinter as tk
 from tkinter import ttk
 
 try:
+    from usage_windows import (
+        normalize_claude_desktop,
+        normalize_claude_usage,
+        normalize_codex_usage,
+    )
+except ImportError:
+    from src.usage_windows import (
+        normalize_claude_desktop,
+        normalize_claude_usage,
+        normalize_codex_usage,
+    )
+
+try:
     import certifi
 except Exception:
     certifi=None
 
 APP_NAME="AI Usage Widget"
-APP_VERSION="1.1.4"
+APP_VERSION="1.2.0"
 CLAUDE_URL="https://api.anthropic.com/api/oauth/usage"
 CODEX_URL="https://chatgpt.com/backend-api/wham/usage"
 CURSOR_BASE="https://cursor.com"
@@ -202,18 +215,10 @@ def get_claude_desktop():
     # its cache for a long time. Ask the user to open Claude instead.
     if time.time()-captured>1800:
         return {"status":"error","message":"Claude Desktop öffnen zum Aktualisieren"}
-    labels={
-        "fh":"5h-Limit","sd":"7d-Limit","so":"7d Opus","oa":"7d OAuth-Apps",
-        "cw":"7d Cowork","om":"7d Claude","op":"Claude Promotion","sn":"7d Sonnet",
-        "xu":"Extra Usage",
-    }
-    limits=[]
-    for key,value in values.items():
-        value=num(value)
-        if value is not None:limits.append((value,labels.get(key,"Claude-Limit")))
-    if not limits:return {"status":"error","message":"Claude Desktop: keine Quota-Daten"}
-    used,label=max(limits,key=lambda item:item[0])
-    return {"status":"ok","label":label,"used":used,"reset":None,"source":"claude-desktop"}
+    result=normalize_claude_desktop(values)
+    if result.get("status")!="ok":
+        return {"status":"error","message":"Claude Desktop: keine Quota-Daten","windows":[]}
+    return result
 
 def get_claude():
     c=claude_credentials()
@@ -224,18 +229,8 @@ def get_claude():
         "Authorization":f"Bearer {token}","anthropic-beta":"oauth-2025-04-20",
         "User-Agent":"claude-code/2.1.207","Content-Type":"application/json"})
     if st!=200 or not isinstance(d,dict):return get_claude_desktop()
-    five,seven=d.get("five_hour"),d.get("seven_day")
-    if isinstance(five,dict) or isinstance(seven,dict):
-        a=five if isinstance(five,dict) else seven
-        return {"status":"ok","label":"5h-Limit" if isinstance(five,dict) else "7d-Limit","used":a.get("utilization"),"reset":a.get("resets_at")}
-    spend,extra=d.get("spend") or {},d.get("extra_usage") or {}
-    used=spend.get("percent")
-    if used is None:used=extra.get("utilization")
-    if used is None:return get_claude_desktop()
-    return {"status":"ok","label":"Extra Usage","used":used,"reset":None,
-            "money_used":(spend.get("used") or {}).get("amount_minor",extra.get("used_credits")),
-            "money_limit":(spend.get("limit") or {}).get("amount_minor",extra.get("monthly_limit")),
-            "exp":(spend.get("used") or {}).get("exponent",2)}
+    result=normalize_claude_usage(d)
+    return result if result.get("status")=="ok" else get_claude_desktop()
 
 def get_codex():
     p=Path(os.environ.get("CODEX_HOME") or (Path.home()/".codex"))/"auth.json"
@@ -248,19 +243,10 @@ def get_codex():
     if aid:h["ChatGPT-Account-Id"]=aid
     st,d,_=request_json(CODEX_URL,h)
     if st!=200 or not isinstance(d,dict):return {"status":"error","message":f"HTTP {st or 'ERR'}"}
-    wins=[]
-    rl=d.get("rate_limit")
-    if isinstance(rl,dict):
-        for key,fallback in (("primary_window","5h"),("secondary_window","7d")):
-            w=rl.get(key)
-            if not isinstance(w,dict) or w.get("used_percent") is None:continue
-            secs=w.get("limit_window_seconds")
-            label=("7d" if float(secs)>=86400 else "5h") if secs is not None else fallback
-            wins.append({"label":label,"used":w.get("used_percent"),"reset":w.get("reset_at")})
-    if not wins:return {"status":"error","message":"Keine Rate-Limit-Daten"}
-    a=next((w for w in wins if w["label"]=="5h"),None) or next((w for w in wins if w["label"]=="7d"),wins[0])
+    result=normalize_codex_usage(d)
     email=jwt_payload(iid).get("email") if iid else None
-    return {"status":"ok","label":"Wochenlimit" if a["label"]=="7d" else "5h-Limit","used":a["used"],"reset":a["reset"],"email":email}
+    if email:result["email"]=email
+    return result
 
 def cursor_db_path(platform_name=None, env=None, home=None):
     platform_name=platform_name or sys.platform
@@ -361,18 +347,88 @@ class Bar(tk.Canvas):
         col="#22c55e" if n>=30 else ("#f59e0b" if n>=10 else "#ef4444")
         self.create_rectangle(0,0,self.w*n/100,self.h,fill=col,outline="")
 
-class SingleCard(ttk.Frame):
-    def __init__(self,p,name):
-        super().__init__(p,padding=(14,8)); self.columnconfigure(1,weight=1)
-        ttk.Label(self,text=name,font=("Segoe UI",14,"bold")).grid(row=0,column=0,sticky="w")
-        self.badge=ttk.Label(self,text="—",font=("Segoe UI",11,"bold")); self.badge.grid(row=0,column=1,sticky="e")
-        self.stats=ttk.Label(self,text="",foreground=SECONDARY_TEXT); self.stats.grid(row=1,column=0,columnspan=2,sticky="w",pady=(4,2))
-        self.reset=ttk.Label(self,text="",foreground=SECONDARY_TEXT); self.reset.grid(row=2,column=0,columnspan=2,sticky="w",pady=(0,5))
-        self.bar=Bar(self); self.bar.grid(row=3,column=0,columnspan=2,sticky="ew")
-    def set(self,used,reset,label,extra=""):
-        r=remain(used); self.badge.config(text=f"{pt(r)} frei" if r is not None else "—")
-        self.stats.config(text=f"{label} · {pt(used)} verbraucht · {pt(r)} verbleibend"+(f" · {extra}" if extra else ""))
-        self.reset.config(text=reset_text(reset) or "Reset: vom Anbieter nicht gemeldet"); self.bar.set(r); return r
+class UsageWindowRow(ttk.Frame):
+    def __init__(self,parent):
+        super().__init__(parent)
+        self.columnconfigure(1,weight=1)
+        self.label=ttk.Label(self,text="",font=("Segoe UI",10,"bold"))
+        self.label.grid(row=0,column=0,sticky="w")
+        self.badge=ttk.Label(self,text="—",font=("Segoe UI",10,"bold"))
+        self.badge.grid(row=0,column=1,sticky="e")
+        self.stats=ttk.Label(self,text="",foreground=SECONDARY_TEXT)
+        self.stats.grid(row=1,column=0,columnspan=2,sticky="w",pady=(2,1))
+        self.reset=ttk.Label(self,text="",foreground=SECONDARY_TEXT)
+        self.reset.grid(row=2,column=0,columnspan=2,sticky="w",pady=(0,4))
+        self.bar=Bar(self)
+        self.bar.grid(row=3,column=0,columnspan=2,sticky="ew")
+
+    def set(self,window):
+        used=window.get("used_percent")
+        remaining=remain(used)
+        self.label.config(text=window.get("label") or "Limit")
+        self.badge.config(text=f"{pt(remaining)} frei" if remaining is not None else "—")
+        extra=""
+        if window.get("used_minor") is not None or window.get("limit_minor") is not None:
+            exponent=window.get("exponent",2)
+            extra=f" · {money_minor(window.get('used_minor'),exponent)}/{money_minor(window.get('limit_minor'),exponent)}"
+        self.stats.config(text=f"{pt(used)} verbraucht · {pt(remaining)} verbleibend{extra}")
+        self.reset.config(text=reset_text(window.get("resets_at")) or "Reset: vom Anbieter nicht gemeldet")
+        self.bar.set(remaining)
+        return remaining
+
+
+class UsageCard(ttk.Frame):
+    def __init__(self,parent,name):
+        super().__init__(parent,padding=(14,8))
+        self.name=name
+        self.title=ttk.Label(self,text=name,font=("Segoe UI",14,"bold"))
+        self.title.pack(fill="x",anchor="w")
+        self.body=ttk.Frame(self)
+        self.body.pack(fill="x",pady=(5,0))
+
+    def set_data(self,data):
+        for child in self.body.winfo_children():
+            child.destroy()
+        windows=data.get("windows") or []
+        if not windows and data.get("used") is not None:
+            windows=[{"id":"legacy","label":data.get("label","Limit"),"used_percent":data.get("used"),"resets_at":data.get("reset")}]
+        if not windows:
+            ttk.Label(self.body,text=data.get("message","Keine Daten"),foreground=SECONDARY_TEXT).pack(fill="x")
+            return None
+        remaining=[]
+        for index,window in enumerate(windows):
+            if index:
+                ttk.Separator(self.body,orient="horizontal").pack(fill="x",pady=(8,7))
+            row=UsageWindowRow(self.body)
+            row.pack(fill="x")
+            value=row.set(window)
+            if value is not None:
+                remaining.append(value)
+        return min(remaining) if remaining else None
+
+
+class VerticalScrollFrame(ttk.Frame):
+    def __init__(self,parent):
+        super().__init__(parent)
+        self.canvas=tk.Canvas(self,highlightthickness=0,bg=parent.cget("bg"))
+        self.scrollbar=ttk.Scrollbar(self,orient="vertical",command=self.canvas.yview)
+        self.inner=ttk.Frame(self.canvas)
+        self.window=self.canvas.create_window((0,0),window=self.inner,anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.pack(side="left",fill="both",expand=True)
+        self.scrollbar.pack(side="right",fill="y")
+        self.inner.bind("<Configure>",self._content_changed)
+        self.canvas.bind("<Configure>",lambda event:self.canvas.itemconfigure(self.window,width=event.width))
+        self.canvas.bind("<Enter>",lambda _event:self.canvas.bind_all("<MouseWheel>",self._wheel))
+        self.canvas.bind("<Leave>",lambda _event:self.canvas.unbind_all("<MouseWheel>"))
+
+    def _content_changed(self,_event=None):
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _wheel(self,event):
+        if event.delta:
+            step=int(-event.delta/120)
+            self.canvas.yview_scroll(step if step else (-1 if event.delta>0 else 1),"units")
 
 class ModelUsageRow(ttk.Frame):
     def __init__(self,parent):
@@ -526,15 +582,15 @@ class App:
         self.root.attributes("-topmost",False)
         self.root.protocol("WM_DELETE_WINDOW",self.quit if sys.platform=="darwin" else self.hide)
         self.stop=False; self.tray=None; self.data={}; self.widget_server=WidgetDataServer(self.widget_snapshot)
-        self.outer=ttk.Frame(self.root,padding=14); self.outer.pack(fill="both",expand=True)
-        self.claude=SingleCard(self.outer,"Claude"); self.claude.pack(fill="x",pady=(0,3))
-        self.codex=SingleCard(self.outer,"ChatGPT"); self.codex.pack(fill="x",pady=3)
+        self.scroller=VerticalScrollFrame(self.root); self.scroller.pack(fill="both",expand=True)
+        self.outer=ttk.Frame(self.scroller.inner,padding=14); self.outer.pack(fill="both",expand=True)
+        self.claude=UsageCard(self.outer,"Claude"); self.claude.pack(fill="x",pady=(0,3))
+        self.codex=UsageCard(self.outer,"ChatGPT"); self.codex.pack(fill="x",pady=3)
         self.cursor=CursorCard(self.outer,self.resize_for_details); self.cursor.pack(fill="x",pady=3)
         self.note=ttk.Label(self.outer,text="",foreground=SECONDARY_TEXT,wraplength=430); self.note.pack(fill="x",pady=(4,0))
         self.setup_tray(); self.place_bottom_right(); self.root.deiconify(); threading.Thread(target=self.loop,daemon=True).start()
     def resize_for_details(self,expanded):
-        h=730 if expanded else 470
-        self.root.geometry(f"470x{h}"); self.root.after(10,self.place_bottom_right)
+        self.root.after(10,self.resize_for_usage)
     def place_bottom_right(self):
         self.root.update_idletasks(); w=self.root.winfo_width(); h=self.root.winfo_height()
         sw=self.root.winfo_screenwidth(); sh=self.root.winfo_screenheight()
@@ -577,11 +633,31 @@ class App:
         cursor=self.data.get("cursor") or {}
         cursor_remaining=[remain(cursor.get(key)) for key in ("cursor_models_used","other_models_used")]
         cursor_remaining=[value for value in cursor_remaining if value is not None]
+        cursor_windows=[]
+        for window_id,label,key in (
+            ("cursor-models","Cursor Models","cursor_models_used"),
+            ("cursor-other-models","Other Models","other_models_used"),
+        ):
+            if cursor.get(key) is not None:
+                cursor_windows.append({"id":window_id,"label":label,"usedPercent":clamp(cursor.get(key)),"resetsAt":cursor.get("reset"),"type":"monthly"})
+        def public_windows(data):
+            return [{
+                "id":window.get("id","limit"),
+                "label":window.get("label","Limit"),
+                "usedPercent":clamp(window.get("used_percent")),
+                "resetsAt":window.get("resets_at"),
+                "type":window.get("type","other"),
+            } for window in data.get("windows") or [] if clamp(window.get("used_percent")) is not None]
         return {
             "updated":datetime.now(timezone.utc).isoformat(),
             "claudeRemaining":remain(claude.get("used")),
             "codexRemaining":remain(codex.get("used")),
             "cursorRemaining":min(cursor_remaining) if cursor_remaining else None,
+            "providers":[
+                {"id":"claude","title":"Claude","windows":public_windows(claude)},
+                {"id":"chatgpt","title":"ChatGPT","windows":public_windows(codex)},
+                {"id":"cursor","title":"Cursor","windows":cursor_windows},
+            ],
         }
     def quit(self,*_):
         self.stop=True
@@ -599,14 +675,22 @@ class App:
         self.data={"claude":get_claude(),"codex":get_codex(),"cursor":get_cursor()}; self.root.after(0,self.render)
     def render(self):
         c,x,u=self.data["claude"],self.data["codex"],self.data["cursor"]; notes=[]
-        cr=self.claude.set(c.get("used"),c.get("reset"),c.get("label",c.get("message","Keine Daten")),
-                           f"{money_minor(c.get('money_used'),c.get('exp',2))}/{money_minor(c.get('money_limit'),c.get('exp',2))}" if c.get("money_used") is not None else "")
-        xr=self.codex.set(x.get("used"),x.get("reset"),x.get("label",x.get("message","Keine Daten")))
+        cr=self.claude.set_data(c)
+        xr=self.codex.set_data(x)
         if x.get("email"):notes.append(f"ChatGPT-Konto: {x['email']}")
         ur=self.cursor.set(u) if u.get("status")=="ok" else None
         if u.get("status")!="ok":notes.append("Cursor: "+u.get("message","Keine Daten"))
         self.note.config(text=" · ".join(notes))
+        self.root.after_idle(self.resize_for_usage)
         if self.tray:self.tray.title=f"Claude {pt(cr)} frei · ChatGPT {pt(xr)} frei · Cursor knappster Pool {pt(ur)} frei"
+    def resize_for_usage(self):
+        self.root.update_idletasks()
+        expanded=self.cursor.table_expanded or self.cursor.usage_expanded
+        requested=self.outer.winfo_reqheight()+28
+        limit=max(470,self.root.winfo_screenheight()-100)
+        height=min(limit,max(730 if expanded else 470,requested))
+        self.root.geometry(f"470x{height}")
+        self.place_bottom_right()
     def run(self):self.root.mainloop()
 
 if __name__=="__main__":App().run()

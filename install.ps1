@@ -4,7 +4,7 @@ $AppName = "AI Usage Widget"
 $InstallDir = Join-Path $env:LOCALAPPDATA "AIUsageWidget"
 $SourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-Write-Host "Installing $AppName 1.0.0..." -ForegroundColor Cyan
+Write-Host "Installing $AppName 1.2.0..." -ForegroundColor Cyan
 
 function Find-Python {
     if (Get-Command py -ErrorAction SilentlyContinue) { return "py" }

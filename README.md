@@ -1,7 +1,7 @@
 # AI Usage Widget
 
-![Windows version](https://img.shields.io/badge/Windows-1.0.0-blue)
-![macOS version](https://img.shields.io/badge/macOS-1.1.4-blue)
+![Windows version](https://img.shields.io/badge/Windows-1.2.0-blue)
+![macOS version](https://img.shields.io/badge/macOS-1.2.0-blue)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -36,9 +36,10 @@ The Windows app lives in the system tray. On macOS, the app behaves like a norma
 ## Features
 
 - Remaining and consumed usage shown together
+- Dynamic session, daily, weekly, model-specific, monthly, and future provider limits
 - Reset countdown and reset date when the provider exposes it
 - Claude Extra Usage support
-- ChatGPT / Codex weekly or 5-hour agent limit support
+- ChatGPT / Codex short-term, weekly, and model-specific agent limit support
 - Separate Cursor **Cursor Models** and **Other Models** pools
 - Expandable Cursor model table with requests, weighted usage and costs
 - Expandable **Model consumption** view with one bar per Cursor model
@@ -148,8 +149,9 @@ certificate. Then open Terminal in the repository folder and run:
 ```
 
 After installation, use macOS **Edit Widgets**, search for **AI Usage**, and add
-the small or medium widget. The AI Usage Widget app must remain running for new
-usage snapshots every five minutes. If the app is closed, WidgetKit may continue
+the small, medium, or large widget. The small view summarizes the tightest pool
+per provider; medium and large views show additional time and model limits. The
+AI Usage Widget app must remain running for new usage snapshots every five minutes. If the app is closed, WidgetKit may continue
 showing its most recent entry, but that value is no longer guaranteed to be
 current.
 
@@ -204,8 +206,9 @@ Typical location:
 ```
 
 Claude Desktop-only users should open Claude Desktop periodically so its local
-usage cache remains current. The app can show normal 5h/7d limits when exposed
-by Anthropic. For accounts using **Extra Usage**, it displays used and remaining
+usage cache remains current. The app renders every session, weekly,
+model-scoped, routines, and future usage window that Anthropic actually returns.
+For accounts using **Extra Usage**, it displays used and remaining
 budget. When Anthropic does not expose a reset timestamp, the widget says that
 the provider did not report one instead of estimating a date.
 
@@ -217,7 +220,10 @@ The app reads the existing Codex login:
 %USERPROFILE%\.codex\auth.json
 ```
 
-The displayed quota is the Codex / agent quota associated with the ChatGPT account. Normal ChatGPT conversations are not necessarily part of this quota.
+The displayed quota is the Codex / agent quota associated with the ChatGPT
+account. Window names are derived from the provider's duration, and additional
+model-specific rate limits are added automatically. Normal ChatGPT conversations
+are not necessarily part of this quota.
 
 ### Cursor
 
@@ -284,8 +290,8 @@ chmod +x scripts/macos/uninstall.sh
 
 ## Version
 
-- Windows: **1.0.0**
-- macOS: **1.1.4**
+- Windows: **1.2.0**
+- macOS: **1.2.0**
 
 ## License
 

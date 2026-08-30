@@ -24,8 +24,9 @@ Complete the following steps:
    ./scripts/macos/install.sh --with-widget
    ```
 
-5. Open macOS **Edit Widgets**, search for **AI Usage**, and add the small or
-   medium widget.
+5. Open macOS **Edit Widgets**, search for **AI Usage**, and add the small,
+   medium, or large widget. Small summarizes each provider; medium and large
+   display the additional time and model-specific limits.
 
 The command stops with a clear message when Xcode or the signing certificate is
 missing; it does not silently replace the requested developer build with the

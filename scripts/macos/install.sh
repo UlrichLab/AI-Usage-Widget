@@ -57,6 +57,7 @@ fi
 
 widget_build=false
 sign_identity=""
+sign_hash=""
 bundle_id="com.ulrichlab.ai-usage-widget"
 developer_dir=$(xcode-select -p 2>/dev/null || true)
 
@@ -65,11 +66,14 @@ if [ "$install_mode" != "app" ]; then
         *.app/Contents/Developer)
             if xcodebuild -version >/dev/null 2>&1 && xcrun --find swiftc >/dev/null 2>&1; then
                 sign_identity=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)
+                sign_hash=$(security find-identity -v -p codesigning | sed -n 's/^[[:space:]]*[0-9]*) \([0-9A-F]*\) "Apple Development:.*/\1/p' | head -1)
                 if [ -z "$sign_identity" ]; then
                     sign_identity=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)
+                    sign_hash=$(security find-identity -v -p codesigning | sed -n 's/^[[:space:]]*[0-9]*) \([0-9A-F]*\) "Developer ID Application:.*/\1/p' | head -1)
                 fi
-                sign_team=$(printf '%s' "$sign_identity" | sed -n 's/.*(\([^()]*\))$/\1/p')
-                if [ -n "$sign_team" ]; then
+                cert_subject=$(security find-certificate -c "$sign_identity" -p 2>/dev/null | /usr/bin/openssl x509 -noout -subject 2>/dev/null || true)
+                sign_team=$(printf '%s' "$cert_subject" | sed -n 's|.*\/OU=\([^/]*\).*|\1|p')
+                if [ -n "$sign_team" ] && [ -n "$sign_hash" ]; then
                     widget_build=true
                     bundle_suffix=$(printf '%s' "$sign_team" | tr '[:upper:]' '[:lower:]')
                     bundle_id="com.ulrichlab.ai-usage-widget.$bundle_suffix"
@@ -119,11 +123,11 @@ set -- "$@" \
 
 built_app="$dist_dir/AI Usage Widget.app"
 /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName AI Usage Widget" "$built_app/Contents/Info.plist"
-if ! /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.1.4" "$built_app/Contents/Info.plist"; then
-	/usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string 1.1.4" "$built_app/Contents/Info.plist"
+if ! /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.2.0" "$built_app/Contents/Info.plist"; then
+	/usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string 1.2.0" "$built_app/Contents/Info.plist"
 fi
-if ! /usr/libexec/PlistBuddy -c "Set :CFBundleVersion 9" "$built_app/Contents/Info.plist"; then
-	/usr/libexec/PlistBuddy -c "Add :CFBundleVersion string 9" "$built_app/Contents/Info.plist"
+if ! /usr/libexec/PlistBuddy -c "Set :CFBundleVersion 10" "$built_app/Contents/Info.plist"; then
+	/usr/libexec/PlistBuddy -c "Add :CFBundleVersion string 10" "$built_app/Contents/Info.plist"
 fi
 /usr/libexec/PlistBuddy -c "Add :NSPrincipalClass string NSApplication" "$built_app/Contents/Info.plist" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Delete :LSUIElement" "$built_app/Contents/Info.plist" 2>/dev/null || true
@@ -138,7 +142,8 @@ if [ "$widget_build" = true ]; then
 	-allowProvisioningUpdates \
 	DEVELOPMENT_TEAM="$sign_team" \
 	AI_USAGE_BUNDLE_SUFFIX="$bundle_suffix" \
-	CODE_SIGN_IDENTITY="$sign_identity" \
+	CODE_SIGN_STYLE="Manual" \
+	CODE_SIGN_IDENTITY="$sign_hash" \
 	build
     # xcodebuild registers its temporary host automatically. Remove that duplicate so
     # WidgetKit only sees the extension inside the app that is actually installed.
@@ -150,6 +155,7 @@ if [ "$widget_build" = true ]; then
     codesign --force --sign "$sign_identity" "$built_app"
 fi
 
+/usr/bin/pkill -x "AI Usage Widget" 2>/dev/null || true
 if [ -d "$app_bundle" ]; then
     pluginkit -r "$app_bundle/Contents/PlugIns/AIUsageWidgetExtension.appex" 2>/dev/null || true
     "$lsregister" -u "$app_bundle" 2>/dev/null || true
