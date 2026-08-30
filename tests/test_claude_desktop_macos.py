@@ -39,6 +39,26 @@ class ClaudeDesktopUsageTests(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("öffnen", result["message"])
 
+    def test_account_identity_helpers(self):
+        self.assertEqual(
+            MODULE.account_email({"account": {"emailAddress": "mac@example.com"}}),
+            "mac@example.com",
+        )
+        self.assertEqual(MODULE.account_display({"account_id": "mac-user"}), "ID: mac-user")
+
+    def test_cursor_fetches_identity_without_breaking_usage(self):
+        responses = [
+            (200, {"individualUsage": {"plan": {"autoPercentUsed": 7}}}, None),
+            (200, {"email": "cursor-mac@example.com"}, None),
+            (404, None, "not available"),
+            (404, None, "not available"),
+        ]
+        with patch.object(MODULE, "cursor_session", return_value=("cookie", "user-id", None)), \
+                patch.object(MODULE, "request_json", side_effect=responses):
+            result = MODULE.get_cursor()
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["email"], "cursor-mac@example.com")
+
     def test_widget_snapshot_exposes_all_windows_without_credentials(self):
         app = object.__new__(MODULE.App)
         app.data = {
