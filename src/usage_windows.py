@@ -233,7 +233,15 @@ def normalize_claude_usage(data):
     for key, raw in data.items():
         if key in consumed_keys or key in ignored or not isinstance(raw, dict):
             continue
-        if number(raw.get("utilization")) is None:
+        utilization = number(raw.get("utilization"))
+        if utilization is None:
+            continue
+        # Claude sometimes exposes opaque internal feature codenames (for example
+        # `nimbus_quill`) as an inactive 0% object. Without a reset, lock reason,
+        # or monetary limit, these are not meaningful user-facing usage lanes.
+        if utilization == 0 and not raw.get("resets_at") and not raw.get("locked_reason") \
+                and all(number(raw.get(key)) is None for key in
+                        ("limit_dollars","used_dollars","remaining_dollars")):
             continue
         window_id = f"claude-{slug(key)}"
         if window_id in seen_ids:
@@ -243,7 +251,7 @@ def normalize_claude_usage(data):
         if inferred_type == "weekly":
             label = f"{label} · Wöchentlich" if label else "Wöchentlich"
         window = make_window(window_id, label or "Claude-Limit", inferred_type,
-                             raw.get("utilization"), raw.get("resets_at"),
+                             utilization, raw.get("resets_at"),
                              604800 if inferred_type == "weekly" else None, scope=key)
         if window:
             windows.append(window)

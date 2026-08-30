@@ -53,6 +53,20 @@ class ClaudeUsageWindowTests(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["windows"], [])
 
+    def test_inactive_opaque_backend_lane_is_hidden(self):
+        result = normalize_claude_usage({
+            "five_hour": {"utilization": 12},
+            "nimbus_quill": {
+                "utilization": 0,
+                "resets_at": None,
+                "limit_dollars": None,
+                "used_dollars": None,
+                "remaining_dollars": None,
+                "locked_reason": None,
+            },
+        })
+        self.assertEqual([window["label"] for window in result["windows"]], ["5 Stunden"])
+
     def test_unknown_new_scope_is_preserved(self):
         result = normalize_claude_usage({
             "limits": [{"kind": "weekly_scoped", "group": "weekly", "percent": 48,
