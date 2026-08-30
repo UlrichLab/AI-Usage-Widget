@@ -22,6 +22,7 @@ REFRESH_SECONDS=300
 APP_WIDTH=450
 _CLAUDE_OAUTH_CACHE={}
 _CLAUDE_OAUTH_LOCK=threading.Lock()
+SECONDARY_TEXT="#555"
 
 try:
     import pystray
@@ -316,7 +317,7 @@ class UsageCard(ttk.Frame):
         if not windows and data.get("used") is not None:
             windows=[{"id":"legacy","label":data.get("label","Limit"),"used_percent":data.get("used"),"resets_at":data.get("reset")}]
         if not windows:
-            ttk.Label(self.body,text=data.get("message","Keine Daten"),foreground="#666").pack(fill="x")
+            ttk.Label(self.body,text=data.get("message","Keine Daten"),foreground=SECONDARY_TEXT).pack(fill="x")
             return None
         remaining=[]
         for index,window in enumerate(windows):
@@ -406,14 +407,14 @@ class CursorCard(ttk.Frame):
         self.usage_btn=ttk.Button(buttons,text="Modellverbrauch ▾",command=self.flip_usage)
         self.usage_btn.pack(side="left")
 
-        self.overall=ttk.Label(self,text="",foreground="#555"); self.overall.grid(row=1,column=0,sticky="w",pady=(3,6))
+        self.overall=ttk.Label(self,text="",foreground=SECONDARY_TEXT); self.overall.grid(row=1,column=0,sticky="w",pady=(3,6))
         ttk.Label(self,text="Cursor Models").grid(row=2,column=0,sticky="w")
         self.cmstat=ttk.Label(self,text="",font=("Segoe UI",10,"bold")); self.cmstat.grid(row=3,column=0,sticky="e")
         self.cmb=Bar(self); self.cmb.grid(row=4,column=0,sticky="ew",pady=(2,6))
         ttk.Label(self,text="Other Models").grid(row=5,column=0,sticky="w")
         self.omstat=ttk.Label(self,text="",font=("Segoe UI",10,"bold")); self.omstat.grid(row=6,column=0,sticky="e")
         self.omb=Bar(self); self.omb.grid(row=7,column=0,sticky="ew",pady=(2,6))
-        self.reset=ttk.Label(self,text="",foreground="#666"); self.reset.grid(row=8,column=0,sticky="w")
+        self.reset=ttk.Label(self,text="",foreground=SECONDARY_TEXT); self.reset.grid(row=8,column=0,sticky="w")
 
         self.table_frame=ttk.Frame(self)
         self.tree=ttk.Treeview(self.table_frame,columns=("model","requests","weighted","cost"),show="headings",height=7)
@@ -523,7 +524,7 @@ class AccountsPanel(ttk.Frame):
         for key,title in (("claude","Claude"),("codex","ChatGPT"),("cursor","Cursor")):
             row=ttk.Frame(self.body); row.pack(fill="x",pady=1)
             ttk.Label(row,text=title,width=10).pack(side="left")
-            value=ttk.Label(row,text="—",foreground="#777",wraplength=330)
+            value=ttk.Label(row,text="—",foreground=SECONDARY_TEXT,wraplength=330)
             value.pack(side="left",fill="x",expand=True); self.rows[key]=value
     def toggle(self):
         self.expanded=not self.expanded
@@ -537,19 +538,16 @@ class AccountsPanel(ttk.Frame):
 
 class App:
     def __init__(self):
-        self.root=tk.Tk(); self.root.title(APP_NAME); self.root.geometry(f"{APP_WIDTH}x500"); self.root.resizable(False,False)
+        self.root=tk.Tk(); self.root.title(APP_NAME); self.root.geometry(f"{APP_WIDTH}x470"); self.root.resizable(False,False)
         self.root.attributes("-topmost",False); self.root.protocol("WM_DELETE_WINDOW",self.hide); self.root.withdraw()
         self.stop=False; self.tray=None; self.data={}
         self.scroller=VerticalScrollFrame(self.root); self.scroller.pack(fill="both",expand=True)
         self.outer=ttk.Frame(self.scroller.inner,padding=14); self.outer.pack(fill="both",expand=True)
-        top=ttk.Frame(self.outer); top.pack(fill="x")
-        ttk.Label(top,text="AI Usage",font=("Segoe UI",15,"bold")).pack(side="left")
-        self.updated=ttk.Label(top,text="",foreground="#777"); self.updated.pack(side="right")
-        self.claude=UsageCard(self.outer,"Claude"); self.claude.pack(fill="x",pady=(8,3))
-        self.codex=UsageCard(self.outer,"ChatGPT / Codex"); self.codex.pack(fill="x",pady=3)
+        self.claude=UsageCard(self.outer,"Claude"); self.claude.pack(fill="x",pady=(0,3))
+        self.codex=UsageCard(self.outer,"ChatGPT"); self.codex.pack(fill="x",pady=3)
         self.cursor=CursorCard(self.outer,self.resize_for_details); self.cursor.pack(fill="x",pady=3)
         self.accounts=AccountsPanel(self.outer,self.resize_for_details); self.accounts.pack(fill="x",pady=(5,0))
-        self.note=ttk.Label(self.outer,text="",foreground="#777",wraplength=APP_WIDTH-40)
+        self.note=ttk.Label(self.outer,text="",foreground=SECONDARY_TEXT,wraplength=APP_WIDTH-40)
         self.setup_tray(); threading.Thread(target=self.loop,daemon=True).start()
     def resize_for_details(self,expanded):
         self.root.after(10,self.resize_for_usage)
@@ -611,7 +609,6 @@ class App:
         self.note.config(text=note_text)
         if note_text and not self.note.winfo_manager():self.note.pack(fill="x",pady=(4,0))
         elif not note_text:self.note.pack_forget()
-        self.updated.config(text=datetime.now().strftime("%H:%M"))
         self.root.after_idle(self.resize_for_usage)
         if self.tray:self.tray.title=f"Claude {pt(cr)} frei · ChatGPT/Codex {pt(xr)} frei · Cursor knappster Pool {pt(ur)} frei"
     def resize_for_usage(self):
