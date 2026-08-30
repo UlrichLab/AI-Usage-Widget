@@ -27,6 +27,7 @@ except Exception:
 APP_NAME="AI Usage Widget"
 APP_VERSION="1.2.0"
 CLAUDE_URL="https://api.anthropic.com/api/oauth/usage"
+CLAUDE_PROFILE_URL="https://api.anthropic.com/api/oauth/profile"
 CODEX_URL="https://chatgpt.com/backend-api/wham/usage"
 CURSOR_BASE="https://cursor.com"
 REFRESH_SECONDS=300
@@ -134,6 +135,23 @@ def jwt_payload(token):
         return json.loads(base64.urlsafe_b64decode(p).decode("utf-8"))
     except Exception:return {}
 
+def account_email(data):
+    if not isinstance(data,dict):return None
+    account=data.get("account") if isinstance(data.get("account"),dict) else {}
+    for source in (account,data):
+        for key in ("emailAddress","email_address","email"):
+            value=source.get(key)
+            if isinstance(value,str) and "@" in value:return value.strip()
+    return None
+
+def account_display(data):
+    email=data.get("email")
+    if email:return email
+    account_id=data.get("account_id")
+    if account_id:return f"ID: {account_id}"
+    if data.get("status")=="ok":return "Angemeldet · Adresse nicht verfügbar"
+    return data.get("message") or "Nicht angemeldet"
+
 def request_json(url,headers=None,method="GET",body=None,timeout=15):
     data=None
     if body is not None:data=json.dumps(body).encode("utf-8")
@@ -225,12 +243,16 @@ def get_claude():
     if not isinstance(c,dict):return get_claude_desktop()
     token=(c.get("claudeAiOauth") or {}).get("accessToken")
     if not token:return get_claude_desktop()
-    st,d,_=request_json(CLAUDE_URL,{
+    headers={
         "Authorization":f"Bearer {token}","anthropic-beta":"oauth-2025-04-20",
-        "User-Agent":"claude-code/2.1.207","Content-Type":"application/json"})
-    if st!=200 or not isinstance(d,dict):return get_claude_desktop()
-    result=normalize_claude_usage(d)
-    return result if result.get("status")=="ok" else get_claude_desktop()
+        "User-Agent":"claude-code/2.1.207","Content-Type":"application/json"}
+    pst,profile,_=request_json(CLAUDE_PROFILE_URL,headers)
+    email=account_email(profile) if pst==200 else None
+    st,d,_=request_json(CLAUDE_URL,headers)
+    result=normalize_claude_usage(d) if st==200 and isinstance(d,dict) else get_claude_desktop()
+    if result.get("status")!="ok":result=get_claude_desktop()
+    if email:result["email"]=email
+    return result
 
 def get_codex():
     p=Path(os.environ.get("CODEX_HOME") or (Path.home()/".codex"))/"auth.json"
@@ -263,16 +285,16 @@ def cursor_session():
     con=sqlite3.connect(f"file:{db}?mode=ro",uri=True,timeout=2)
     row=con.execute("SELECT value FROM ItemTable WHERE key=?",("cursorAuth/accessToken",)).fetchone()
     con.close()
-    if not row:return None,None
+    if not row:return None,None,None
     token=row[0]
     payload=jwt_payload(token)
     sub=payload.get("sub","")
     uid=sub.rsplit("|",1)[-1]
     cookie=f"{uid}%3A%3A{token}"
-    return cookie,sub
+    return cookie,sub,account_email(payload)
 
 def get_cursor():
-    try:cookie,sub=cursor_session()
+    try:cookie,sub,token_email=cursor_session()
     except Exception as e:return {"status":"error","message":str(e)}
     if not cookie:return {"status":"error","message":"Kein Cursor-Login"}
     hdr={"Cookie":f"WorkosCursorSessionToken={cookie}","User-Agent":"Mozilla/5.0"}
@@ -281,6 +303,10 @@ def get_cursor():
     plan=((d.get("individualUsage") or {}).get("plan")) or {}
     result={"status":"ok","cursor_models_used":plan.get("autoPercentUsed"),"other_models_used":plan.get("apiPercentUsed"),
             "total_used":plan.get("totalPercentUsed"),"reset":d.get("billingCycleEnd"),"models":[],"model_source":None}
+    ist,identity,_=request_json(CURSOR_BASE+"/api/auth/me",{**hdr,"Accept":"application/json"})
+    email=account_email(identity) if ist==200 else token_email
+    if email:result["email"]=email
+    elif sub:result["account_id"]=sub
 
     # 1) Reliable per-model request counts for current billing cycle.
     # /api/usage?user=<sub> is observed in the Cursor dashboard.
@@ -584,6 +610,29 @@ class CursorCard(ttk.Frame):
         vals=[v for v in (cmr,omr) if v is not None]
         return min(vals) if vals else None
 
+class AccountsPanel(ttk.Frame):
+    def __init__(self,parent,on_toggle):
+        super().__init__(parent)
+        self.on_toggle=on_toggle; self.expanded=False; self.data={}
+        self.toggle_button=ttk.Button(self,text="Konten ▾",command=self.toggle)
+        self.toggle_button.pack(anchor="w")
+        self.body=ttk.Frame(self)
+        self.rows={}
+        for key,title in (("claude","Claude"),("codex","ChatGPT"),("cursor","Cursor")):
+            row=ttk.Frame(self.body); row.pack(fill="x",pady=1)
+            ttk.Label(row,text=title,width=10).pack(side="left")
+            value=ttk.Label(row,text="—",foreground=SECONDARY_TEXT,wraplength=330)
+            value.pack(side="left",fill="x",expand=True); self.rows[key]=value
+    def toggle(self):
+        self.expanded=not self.expanded
+        self.toggle_button.config(text="Konten ▴" if self.expanded else "Konten ▾")
+        if self.expanded:self.body.pack(fill="x",pady=(3,0))
+        else:self.body.pack_forget()
+        self.on_toggle(self.expanded)
+    def set_data(self,data):
+        self.data=data
+        for key,label in self.rows.items():label.config(text=account_display(data.get(key) or {}))
+
 class App:
     def __init__(self):
         self.root=tk.Tk(); self.root.title(APP_NAME); self.root.geometry("470x470"); self.root.resizable(False,False)
@@ -595,6 +644,7 @@ class App:
         self.claude=UsageCard(self.outer,"Claude"); self.claude.pack(fill="x",pady=(0,3))
         self.codex=UsageCard(self.outer,"ChatGPT"); self.codex.pack(fill="x",pady=3)
         self.cursor=CursorCard(self.outer,self.resize_for_details); self.cursor.pack(fill="x",pady=3)
+        self.accounts=AccountsPanel(self.outer,self.resize_for_details); self.accounts.pack(fill="x",pady=(5,0))
         self.note=ttk.Label(self.outer,text="",foreground=SECONDARY_TEXT,wraplength=430); self.note.pack(fill="x",pady=(4,0))
         self.setup_tray(); self.place_bottom_right(); self.root.deiconify(); threading.Thread(target=self.loop,daemon=True).start()
     def resize_for_details(self,expanded):
@@ -685,9 +735,9 @@ class App:
         c,x,u=self.data["claude"],self.data["codex"],self.data["cursor"]; notes=[]
         cr=self.claude.set_data(c)
         xr=self.codex.set_data(x)
-        if x.get("email"):notes.append(f"ChatGPT-Konto: {x['email']}")
         ur=self.cursor.set(u) if u.get("status")=="ok" else None
         if u.get("status")!="ok":notes.append("Cursor: "+u.get("message","Keine Daten"))
+        self.accounts.set_data(self.data)
         self.note.config(text=" · ".join(notes))
         self.root.after_idle(self.resize_for_usage)
         if self.tray:self.tray.title=f"Claude {pt(cr)} frei · ChatGPT {pt(xr)} frei · Cursor knappster Pool {pt(ur)} frei"

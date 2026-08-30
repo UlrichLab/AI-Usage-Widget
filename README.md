@@ -43,6 +43,7 @@ The Windows app lives in the system tray. On macOS, the app behaves like a norma
 - Separate Cursor **Cursor Models** and **Other Models** pools
 - Expandable Cursor model table with requests, weighted usage and costs
 - Expandable **Model consumption** view with one bar per Cursor model
+- Compact, expandable **Accounts** section for the locally detected Claude, ChatGPT, and Cursor login
 - `AI` system-tray icon on Windows
 - Native Dock application and WidgetKit widget on macOS
 - Manual refresh and 5-minute auto-refresh

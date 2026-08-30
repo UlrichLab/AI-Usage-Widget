@@ -43,6 +43,7 @@ class ClaudeDesktopUsageTests(unittest.TestCase):
         app = object.__new__(MODULE.App)
         app.data = {
             "claude": {"status": "ok", "used": 44, "secret": "never-export",
+                       "email": "private@example.com", "account_id": "private-id",
                        "windows": [
                            {"id": "session", "label": "5 Stunden", "type": "session",
                             "used_percent": 12, "resets_at": "2026-09-01T00:00:00Z"},
@@ -55,6 +56,8 @@ class ClaudeDesktopUsageTests(unittest.TestCase):
         snapshot = app.widget_snapshot()
         self.assertEqual(len(snapshot["providers"][0]["windows"]), 2)
         self.assertNotIn("never-export", json.dumps(snapshot))
+        self.assertNotIn("private@example.com", json.dumps(snapshot))
+        self.assertNotIn("private-id", json.dumps(snapshot))
 
 
 if __name__ == "__main__":
