@@ -10,6 +10,33 @@ struct WidgetUsageWindow: Codable, Identifiable {
     let resetsAt: String?
     let type: String
 
+    private enum CodingKeys: String, CodingKey {
+        case id, label, usedPercent, resetsAt, type
+    }
+
+    init(id: String, label: String, usedPercent: Double, resetsAt: String?, type: String) {
+        self.id = id
+        self.label = label
+        self.usedPercent = usedPercent
+        self.resetsAt = resetsAt
+        self.type = type
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        label = try values.decode(String.self, forKey: .label)
+        usedPercent = try values.decode(Double.self, forKey: .usedPercent)
+        type = try values.decode(String.self, forKey: .type)
+        if let text = try? values.decode(String.self, forKey: .resetsAt) {
+            resetsAt = text
+        } else if let timestamp = try? values.decode(Double.self, forKey: .resetsAt) {
+            resetsAt = String(timestamp)
+        } else {
+            resetsAt = nil
+        }
+    }
+
     var remaining: Double { min(100, max(0, 100 - usedPercent)) }
 }
 
@@ -65,7 +92,12 @@ struct UsageProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<UsageEntry>) -> Void) {
         load { entry in
-            completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(300))))
+            // At login WidgetKit can run a fraction of a second before the app's
+            // local server is listening. Retry an empty startup snapshot quickly;
+            // successful snapshots keep the normal five-minute refresh interval.
+            let refreshInterval: TimeInterval = entry.snapshot == nil ? 15 : 300
+            completion(Timeline(entries: [entry],
+                                policy: .after(Date().addingTimeInterval(refreshInterval))))
         }
     }
 

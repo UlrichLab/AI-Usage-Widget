@@ -106,11 +106,15 @@ class ClaudeDesktopUsageTests(unittest.TestCase):
                            {"id": "weekly", "label": "Wöchentlich", "type": "weekly",
                             "used_percent": 44, "resets_at": None},
                        ]},
-            "codex": {"status": "error"},
+            "codex": {"status": "ok", "windows": [
+                {"id": "weekly", "label": "Wöchentlich", "type": "weekly",
+                 "used_percent": 35, "resets_at": 1788726221},
+            ]},
             "cursor": {"status": "ok", "cursor_models_used": 7, "other_models_used": 9},
         }
         snapshot = app.widget_snapshot()
         self.assertEqual(len(snapshot["providers"][0]["windows"]), 2)
+        self.assertEqual(snapshot["providers"][1]["windows"][0]["resetsAt"], "1788726221")
         self.assertNotIn("never-export", json.dumps(snapshot))
         self.assertNotIn("private@example.com", json.dumps(snapshot))
         self.assertNotIn("private-id", json.dumps(snapshot))

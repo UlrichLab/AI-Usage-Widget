@@ -764,6 +764,11 @@ class App:
         claude=self.data.get("claude") or {}
         codex=self.data.get("codex") or {}
         cursor=self.data.get("cursor") or {}
+        def public_reset(value):
+            # Provider APIs use both ISO-8601 strings and Unix timestamps. Keep
+            # the WidgetKit wire format stable so one numeric reset cannot make
+            # Swift discard the complete snapshot.
+            return None if value is None else str(value)
         cursor_remaining=[remain(cursor.get(key)) for key in ("cursor_models_used","other_models_used")]
         cursor_remaining=[value for value in cursor_remaining if value is not None]
         cursor_windows=[]
@@ -772,13 +777,13 @@ class App:
             ("cursor-other-models","Other Models","other_models_used"),
         ):
             if cursor.get(key) is not None:
-                cursor_windows.append({"id":window_id,"label":label,"usedPercent":clamp(cursor.get(key)),"resetsAt":cursor.get("reset"),"type":"monthly"})
+                cursor_windows.append({"id":window_id,"label":label,"usedPercent":clamp(cursor.get(key)),"resetsAt":public_reset(cursor.get("reset")),"type":"monthly"})
         def public_windows(data):
             return [{
                 "id":window.get("id","limit"),
                 "label":window.get("label","Limit"),
                 "usedPercent":clamp(window.get("used_percent")),
-                "resetsAt":window.get("resets_at"),
+                "resetsAt":public_reset(window.get("resets_at")),
                 "type":window.get("type","other"),
             } for window in data.get("windows") or [] if clamp(window.get("used_percent")) is not None]
         return {
