@@ -31,6 +31,7 @@ CLAUDE_PROFILE_URL="https://api.anthropic.com/api/oauth/profile"
 CODEX_URL="https://chatgpt.com/backend-api/wham/usage"
 CURSOR_BASE="https://cursor.com"
 REFRESH_SECONDS=300
+APP_WIDTH=450
 WIDGET_PORT=38471
 SECONDARY_TEXT="systemSecondaryLabelColor" if sys.platform=="darwin" else "#555"
 
@@ -448,18 +449,33 @@ class VerticalScrollFrame(ttk.Frame):
         super().__init__(parent)
         self.canvas=tk.Canvas(self,highlightthickness=0,bg=parent.cget("bg"))
         self.scrollbar=ttk.Scrollbar(self,orient="vertical",command=self.canvas.yview)
+        self.scrollbar_visible=False
         self.inner=ttk.Frame(self.canvas)
         self.window=self.canvas.create_window((0,0),window=self.inner,anchor="nw")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         self.canvas.pack(side="left",fill="both",expand=True)
-        self.scrollbar.pack(side="right",fill="y")
         self.inner.bind("<Configure>",self._content_changed)
-        self.canvas.bind("<Configure>",lambda event:self.canvas.itemconfigure(self.window,width=event.width))
+        self.canvas.bind("<Configure>",self._canvas_changed)
         self.canvas.bind("<Enter>",lambda _event:self.canvas.bind_all("<MouseWheel>",self._wheel))
         self.canvas.bind("<Leave>",lambda _event:self.canvas.unbind_all("<MouseWheel>"))
 
     def _content_changed(self,_event=None):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self.after_idle(self._update_scrollbar)
+
+    def _canvas_changed(self,event):
+        self.canvas.itemconfigure(self.window,width=event.width)
+        self.after_idle(self._update_scrollbar)
+
+    def _update_scrollbar(self):
+        bounds=self.canvas.bbox("all")
+        needs_scroll=bool(bounds and bounds[3]-bounds[1]>self.canvas.winfo_height()+1)
+        if needs_scroll and not self.scrollbar_visible:
+            self.scrollbar.pack(side="right",fill="y")
+            self.scrollbar_visible=True
+        elif not needs_scroll and self.scrollbar_visible:
+            self.scrollbar.pack_forget()
+            self.scrollbar_visible=False
 
     def _wheel(self,event):
         if event.delta:
@@ -635,7 +651,7 @@ class AccountsPanel(ttk.Frame):
 
 class App:
     def __init__(self):
-        self.root=tk.Tk(); self.root.title(APP_NAME); self.root.geometry("470x470"); self.root.resizable(False,False)
+        self.root=tk.Tk(); self.root.title(APP_NAME); self.root.geometry(f"{APP_WIDTH}x470"); self.root.resizable(False,False)
         self.root.attributes("-topmost",False)
         self.root.protocol("WM_DELETE_WINDOW",self.quit if sys.platform=="darwin" else self.hide)
         self.stop=False; self.tray=None; self.data={}; self.widget_server=WidgetDataServer(self.widget_snapshot)
@@ -645,7 +661,7 @@ class App:
         self.codex=UsageCard(self.outer,"ChatGPT"); self.codex.pack(fill="x",pady=3)
         self.cursor=CursorCard(self.outer,self.resize_for_details); self.cursor.pack(fill="x",pady=3)
         self.accounts=AccountsPanel(self.outer,self.resize_for_details); self.accounts.pack(fill="x",pady=(5,0))
-        self.note=ttk.Label(self.outer,text="",foreground=SECONDARY_TEXT,wraplength=430); self.note.pack(fill="x",pady=(4,0))
+        self.note=ttk.Label(self.outer,text="",foreground=SECONDARY_TEXT,wraplength=APP_WIDTH-40)
         self.setup_tray(); self.place_bottom_right(); self.root.deiconify(); threading.Thread(target=self.loop,daemon=True).start()
     def resize_for_details(self,expanded):
         self.root.after(10,self.resize_for_usage)
@@ -738,16 +754,19 @@ class App:
         ur=self.cursor.set(u) if u.get("status")=="ok" else None
         if u.get("status")!="ok":notes.append("Cursor: "+u.get("message","Keine Daten"))
         self.accounts.set_data(self.data)
-        self.note.config(text=" · ".join(notes))
+        note_text=" · ".join(notes)
+        self.note.config(text=note_text)
+        if note_text and not self.note.winfo_manager():self.note.pack(fill="x",pady=(4,0))
+        elif not note_text:self.note.pack_forget()
         self.root.after_idle(self.resize_for_usage)
         if self.tray:self.tray.title=f"Claude {pt(cr)} frei · ChatGPT {pt(xr)} frei · Cursor knappster Pool {pt(ur)} frei"
     def resize_for_usage(self):
         self.root.update_idletasks()
         expanded=self.cursor.table_expanded or self.cursor.usage_expanded
-        requested=self.outer.winfo_reqheight()+28
-        limit=max(470,self.root.winfo_screenheight()-100)
-        height=min(limit,max(730 if expanded else 470,requested))
-        self.root.geometry(f"470x{height}")
+        requested=self.outer.winfo_reqheight()+4
+        limit=max(360,self.root.winfo_screenheight()-100)
+        height=min(limit,max(560 if expanded else 360,requested))
+        self.root.geometry(f"{APP_WIDTH}x{height}")
         self.place_bottom_right()
     def run(self):self.root.mainloop()
 
