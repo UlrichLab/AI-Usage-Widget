@@ -14,10 +14,14 @@ APP_NAME="AI Usage Widget"
 APP_VERSION="1.2.0"
 CLAUDE_URL="https://api.anthropic.com/api/oauth/usage"
 CLAUDE_PROFILE_URL="https://api.anthropic.com/api/oauth/profile"
+CLAUDE_TOKEN_URL="https://platform.claude.com/v1/oauth/token"
+CLAUDE_CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 CODEX_URL="https://chatgpt.com/backend-api/wham/usage"
 CURSOR_BASE="https://cursor.com"
 REFRESH_SECONDS=300
 APP_WIDTH=450
+_CLAUDE_OAUTH_CACHE={}
+_CLAUDE_OAUTH_LOCK=threading.Lock()
 
 try:
     import pystray
@@ -86,19 +90,53 @@ def request_json(url,headers=None,method="GET",body=None,timeout=15):
         return e.code,None,err
     except Exception as e:return None,None,str(e)
 
+def request_form_json(url,fields,timeout=30):
+    from urllib.parse import urlencode
+    req=urllib.request.Request(url,data=urlencode(fields).encode("utf-8"),headers={
+        "Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},method="POST")
+    try:
+        with urllib.request.urlopen(req,timeout=timeout) as r:
+            raw=r.read().decode("utf-8")
+            return r.status,json.loads(raw) if raw else {},None
+    except urllib.error.HTTPError as e:
+        try:err=e.read().decode("utf-8","replace")
+        except Exception:err=str(e)
+        return e.code,None,err
+    except Exception as e:return None,None,str(e)
+
+def refresh_claude_oauth(oauth):
+    refresh_token=_CLAUDE_OAUTH_CACHE.get("refresh_token") or oauth.get("refreshToken")
+    if not refresh_token:return None
+    with _CLAUDE_OAUTH_LOCK:
+        refresh_token=_CLAUDE_OAUTH_CACHE.get("refresh_token") or refresh_token
+        st,data,_=request_form_json(CLAUDE_TOKEN_URL,{
+            "grant_type":"refresh_token","refresh_token":refresh_token,"client_id":CLAUDE_CLIENT_ID})
+        if st!=200 or not isinstance(data,dict) or not data.get("access_token"):return None
+        _CLAUDE_OAUTH_CACHE["access_token"]=data["access_token"]
+        _CLAUDE_OAUTH_CACHE["refresh_token"]=data.get("refresh_token") or refresh_token
+        return data["access_token"]
+
+def claude_headers(token):
+    return {"Authorization":f"Bearer {token}","anthropic-beta":"oauth-2025-04-20",
+            "User-Agent":"claude-code/2.1.207","Content-Type":"application/json"}
+
 def get_claude():
     cred=Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home()/".claude"))/".credentials.json"
     try:
-        c=json.loads(cred.read_text(encoding="utf-8")); token=(c.get("claudeAiOauth") or {}).get("accessToken")
+        c=json.loads(cred.read_text(encoding="utf-8")); oauth=c.get("claudeAiOauth") or {}
     except Exception:return {"status":"error","message":"Nicht angemeldet"}
+    token=_CLAUDE_OAUTH_CACHE.get("access_token") or oauth.get("accessToken")
     if not token:return {"status":"error","message":"OAuth-Token fehlt"}
-    headers={
-        "Authorization":f"Bearer {token}","anthropic-beta":"oauth-2025-04-20",
-        "User-Agent":"claude-code/2.1.207","Content-Type":"application/json"}
+    headers=claude_headers(token)
+    pst,profile,_=request_json(CLAUDE_PROFILE_URL,headers)
+    if pst in (401,403):
+        token=refresh_claude_oauth(oauth)
+        if token:
+            headers=claude_headers(token)
+            pst,profile,_=request_json(CLAUDE_PROFILE_URL,headers)
     st,d,_=request_json(CLAUDE_URL,headers)
     if st!=200 or not isinstance(d,dict):return {"status":"error","message":f"HTTP {st or 'ERR'}"}
     result=normalize_claude_usage(d)
-    pst,profile,_=request_json(CLAUDE_PROFILE_URL,headers)
     email=account_email(profile) if pst==200 else None
     if email:result["email"]=email
     return result
@@ -238,7 +276,7 @@ class UsageWindowRow(ttk.Frame):
         self.columnconfigure(1,weight=1)
         self.label=ttk.Label(self,text="",font=("Segoe UI",10,"bold"))
         self.label.grid(row=0,column=0,sticky="w")
-        self.badge=ttk.Label(self,text="—",font=("Segoe UI",10,"bold"))
+        self.badge=ttk.Label(self,text="—",font=("Segoe UI",11,"bold"))
         self.badge.grid(row=0,column=1,sticky="e")
         self.stats=ttk.Label(self,text="",foreground="#555")
         self.stats.grid(row=1,column=0,columnspan=2,sticky="w",pady=(2,1))
@@ -370,10 +408,10 @@ class CursorCard(ttk.Frame):
 
         self.overall=ttk.Label(self,text="",foreground="#555"); self.overall.grid(row=1,column=0,sticky="w",pady=(3,6))
         ttk.Label(self,text="Cursor Models").grid(row=2,column=0,sticky="w")
-        self.cmstat=ttk.Label(self,text="",font=("Segoe UI",9,"bold")); self.cmstat.grid(row=3,column=0,sticky="e")
+        self.cmstat=ttk.Label(self,text="",font=("Segoe UI",10,"bold")); self.cmstat.grid(row=3,column=0,sticky="e")
         self.cmb=Bar(self); self.cmb.grid(row=4,column=0,sticky="ew",pady=(2,6))
         ttk.Label(self,text="Other Models").grid(row=5,column=0,sticky="w")
-        self.omstat=ttk.Label(self,text="",font=("Segoe UI",9,"bold")); self.omstat.grid(row=6,column=0,sticky="e")
+        self.omstat=ttk.Label(self,text="",font=("Segoe UI",10,"bold")); self.omstat.grid(row=6,column=0,sticky="e")
         self.omb=Bar(self); self.omb.grid(row=7,column=0,sticky="ew",pady=(2,6))
         self.reset=ttk.Label(self,text="",foreground="#666"); self.reset.grid(row=8,column=0,sticky="w")
 

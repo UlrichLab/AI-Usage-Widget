@@ -77,6 +77,16 @@ class ClaudeUsageWindowTests(unittest.TestCase):
 
 
 class CodexUsageWindowTests(unittest.TestCase):
+    def test_month_length_is_labeled_monthly(self):
+        result = normalize_codex_usage({
+            "rate_limit": {"primary_window": {
+                "used_percent": 25,
+                "limit_window_seconds": 30 * 86400,
+            }},
+        })
+        self.assertEqual(result["windows"][0]["label"], "Monatlich")
+        self.assertEqual(result["windows"][0]["type"], "monthly")
+
     def test_duration_controls_labels_and_order(self):
         result = normalize_codex_usage({
             "plan_type": "pro",

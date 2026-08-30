@@ -95,7 +95,7 @@ struct UsageBar: View {
                 Text(title).font(.headline).fontWeight(.bold).lineLimit(1)
                 Spacer()
                 Text(remaining.map { "\(Int($0.rounded())) % frei" } ?? "—")
-                    .font(.subheadline).fontWeight(.bold)
+                    .font(.headline).fontWeight(.bold)
             }
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
@@ -120,7 +120,7 @@ struct DynamicUsageRow: View {
                     .font(.caption).fontWeight(.semibold).lineLimit(1)
                 Spacer(minLength: 4)
                 Text("\(Int(window.remaining.rounded())) % frei")
-                    .font(.caption).fontWeight(.bold).lineLimit(1)
+                    .font(.subheadline).fontWeight(.bold).lineLimit(1)
             }
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {

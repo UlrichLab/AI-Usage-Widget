@@ -70,6 +70,8 @@ def duration_label(seconds, fallback="Limit"):
         days = rounded // 86400
         if days == 1:
             return "Täglich"
+        if 28 <= days <= 31:
+            return "Monatlich"
         return f"{days} Tage"
     if rounded % 3600 == 0:
         hours = rounded // 3600

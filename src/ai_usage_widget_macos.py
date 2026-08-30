@@ -28,10 +28,14 @@ APP_NAME="AI Usage Widget"
 APP_VERSION="1.2.0"
 CLAUDE_URL="https://api.anthropic.com/api/oauth/usage"
 CLAUDE_PROFILE_URL="https://api.anthropic.com/api/oauth/profile"
+CLAUDE_TOKEN_URL="https://platform.claude.com/v1/oauth/token"
+CLAUDE_CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 CODEX_URL="https://chatgpt.com/backend-api/wham/usage"
 CURSOR_BASE="https://cursor.com"
 REFRESH_SECONDS=300
 APP_WIDTH=450
+_CLAUDE_OAUTH_CACHE={}
+_CLAUDE_OAUTH_LOCK=threading.Lock()
 WIDGET_PORT=38471
 SECONDARY_TEXT="systemSecondaryLabelColor" if sys.platform=="darwin" else "#555"
 
@@ -168,6 +172,37 @@ def request_json(url,headers=None,method="GET",body=None,timeout=15):
         return e.code,None,err
     except Exception as e:return None,None,str(e)
 
+def request_form_json(url,fields,timeout=30):
+    from urllib.parse import urlencode
+    req=urllib.request.Request(url,data=urlencode(fields).encode("utf-8"),headers={
+        "Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},method="POST")
+    try:
+        context=ssl.create_default_context(cafile=certifi.where()) if certifi else None
+        with urllib.request.urlopen(req,timeout=timeout,context=context) as r:
+            raw=r.read().decode("utf-8")
+            return r.status,json.loads(raw) if raw else {},None
+    except urllib.error.HTTPError as e:
+        try:err=e.read().decode("utf-8","replace")
+        except Exception:err=str(e)
+        return e.code,None,err
+    except Exception as e:return None,None,str(e)
+
+def refresh_claude_oauth(oauth):
+    refresh_token=_CLAUDE_OAUTH_CACHE.get("refresh_token") or oauth.get("refreshToken")
+    if not refresh_token:return None
+    with _CLAUDE_OAUTH_LOCK:
+        refresh_token=_CLAUDE_OAUTH_CACHE.get("refresh_token") or refresh_token
+        st,data,_=request_form_json(CLAUDE_TOKEN_URL,{
+            "grant_type":"refresh_token","refresh_token":refresh_token,"client_id":CLAUDE_CLIENT_ID})
+        if st!=200 or not isinstance(data,dict) or not data.get("access_token"):return None
+        _CLAUDE_OAUTH_CACHE["access_token"]=data["access_token"]
+        _CLAUDE_OAUTH_CACHE["refresh_token"]=data.get("refresh_token") or refresh_token
+        return data["access_token"]
+
+def claude_headers(token):
+    return {"Authorization":f"Bearer {token}","anthropic-beta":"oauth-2025-04-20",
+            "User-Agent":"claude-code/2.1.207","Content-Type":"application/json"}
+
 
 class WidgetDataServer:
     """Expose non-sensitive usage percentages to the local WidgetKit extension."""
@@ -239,19 +274,43 @@ def get_claude_desktop():
         return {"status":"error","message":"Claude Desktop: keine Quota-Daten","windows":[]}
     return result
 
+def merge_claude_usage(live,desktop):
+    if live.get("status")!="ok":return desktop
+    if desktop.get("status")!="ok":return live
+    windows=[dict(window) for window in desktop.get("windows") or []]
+    positions={window.get("id"):index for index,window in enumerate(windows)}
+    for window in live.get("windows") or []:
+        window_id=window.get("id")
+        if window_id in positions:windows[positions[window_id]]=dict(window)
+        else:
+            positions[window_id]=len(windows)
+            windows.append(dict(window))
+    result=dict(live); result["windows"]=windows; result["source"]="oauth+claude-desktop"
+    valid=[window for window in windows if num(window.get("used_percent")) is not None]
+    if valid:
+        tightest=max(valid,key=lambda window:window["used_percent"])
+        result.update(label=tightest.get("label"),used=tightest.get("used_percent"),reset=tightest.get("resets_at"))
+    return result
+
 def get_claude():
     c=claude_credentials()
     if not isinstance(c,dict):return get_claude_desktop()
-    token=(c.get("claudeAiOauth") or {}).get("accessToken")
+    oauth=c.get("claudeAiOauth") or {}
+    token=_CLAUDE_OAUTH_CACHE.get("access_token") or oauth.get("accessToken")
     if not token:return get_claude_desktop()
-    headers={
-        "Authorization":f"Bearer {token}","anthropic-beta":"oauth-2025-04-20",
-        "User-Agent":"claude-code/2.1.207","Content-Type":"application/json"}
+    headers=claude_headers(token)
     pst,profile,_=request_json(CLAUDE_PROFILE_URL,headers)
+    if pst in (401,403):
+        token=refresh_claude_oauth(oauth)
+        if token:
+            headers=claude_headers(token)
+            pst,profile,_=request_json(CLAUDE_PROFILE_URL,headers)
     email=account_email(profile) if pst==200 else None
     st,d,_=request_json(CLAUDE_URL,headers)
-    result=normalize_claude_usage(d) if st==200 and isinstance(d,dict) else get_claude_desktop()
-    if result.get("status")!="ok":result=get_claude_desktop()
+    desktop=get_claude_desktop()
+    result=normalize_claude_usage(d) if st==200 and isinstance(d,dict) else desktop
+    if result.get("status")=="ok":result=merge_claude_usage(result,desktop)
+    else:result=desktop
     if email:result["email"]=email
     return result
 
@@ -390,7 +449,7 @@ class UsageWindowRow(ttk.Frame):
         self.columnconfigure(1,weight=1)
         self.label=ttk.Label(self,text="",font=("Segoe UI",10,"bold"))
         self.label.grid(row=0,column=0,sticky="w")
-        self.badge=ttk.Label(self,text="—",font=("Segoe UI",10,"bold"))
+        self.badge=ttk.Label(self,text="—",font=("Segoe UI",11,"bold"))
         self.badge.grid(row=0,column=1,sticky="e")
         self.stats=ttk.Label(self,text="",foreground=SECONDARY_TEXT)
         self.stats.grid(row=1,column=0,columnspan=2,sticky="w",pady=(2,1))
@@ -522,10 +581,10 @@ class CursorCard(ttk.Frame):
 
         self.overall=ttk.Label(self,text="",foreground=SECONDARY_TEXT); self.overall.grid(row=1,column=0,sticky="w",pady=(3,6))
         ttk.Label(self,text="Cursor Models").grid(row=2,column=0,sticky="w")
-        self.cmstat=ttk.Label(self,text="",font=("Segoe UI",9,"bold")); self.cmstat.grid(row=3,column=0,sticky="e")
+        self.cmstat=ttk.Label(self,text="",font=("Segoe UI",10,"bold")); self.cmstat.grid(row=3,column=0,sticky="e")
         self.cmb=Bar(self); self.cmb.grid(row=4,column=0,sticky="ew",pady=(2,6))
         ttk.Label(self,text="Other Models").grid(row=5,column=0,sticky="w")
-        self.omstat=ttk.Label(self,text="",font=("Segoe UI",9,"bold")); self.omstat.grid(row=6,column=0,sticky="e")
+        self.omstat=ttk.Label(self,text="",font=("Segoe UI",10,"bold")); self.omstat.grid(row=6,column=0,sticky="e")
         self.omb=Bar(self); self.omb.grid(row=7,column=0,sticky="ew",pady=(2,6))
         self.reset=ttk.Label(self,text="",foreground=SECONDARY_TEXT); self.reset.grid(row=8,column=0,sticky="w")
 

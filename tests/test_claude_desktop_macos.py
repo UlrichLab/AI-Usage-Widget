@@ -15,6 +15,9 @@ SPEC.loader.exec_module(MODULE)
 
 
 class ClaudeDesktopUsageTests(unittest.TestCase):
+    def tearDown(self):
+        MODULE._CLAUDE_OAUTH_CACHE.clear()
+
     def write_history(self, directory, timestamp, usage):
         Path(directory, "plan-usage-history.json").write_text(
             json.dumps({"version": 2, "samples": [{"t": timestamp, "org": "test", "u": usage}]}),
@@ -58,6 +61,39 @@ class ClaudeDesktopUsageTests(unittest.TestCase):
             result = MODULE.get_cursor()
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["email"], "cursor-mac@example.com")
+
+    def test_expired_claude_access_token_is_refreshed_in_memory(self):
+        credentials = {"claudeAiOauth": {"accessToken": "expired", "refreshToken": "refresh"}}
+        requests = [
+            (401, None, "expired"),
+            (200, {"account": {"email": "claude@example.com"}}, None),
+            (200, {
+                "five_hour": {"utilization": 12, "resets_at": "2026-09-01T01:00:00Z"},
+                "seven_day": {"utilization": 34, "resets_at": "2026-09-07T01:00:00Z"},
+            }, None),
+        ]
+        refresh = (200, {"access_token": "fresh", "refresh_token": "fresh-refresh"}, None)
+        with patch.object(MODULE, "claude_credentials", return_value=credentials), \
+                patch.object(MODULE, "request_json", side_effect=requests), \
+                patch.object(MODULE, "request_form_json", return_value=refresh), \
+                patch.object(MODULE, "get_claude_desktop", return_value={"status": "error"}):
+            result = MODULE.get_claude()
+        self.assertEqual(result["source"], "oauth")
+        self.assertEqual(result["email"], "claude@example.com")
+        self.assertEqual(result["windows"][0]["resets_at"], "2026-09-01T01:00:00Z")
+
+    def test_oauth_extras_are_merged_with_desktop_windows(self):
+        desktop = {"status": "ok", "source": "claude-desktop", "windows": [
+            {"id": "claude-session-5h", "label": "5 Stunden", "used_percent": 10, "resets_at": None},
+            {"id": "claude-weekly", "label": "Wöchentlich", "used_percent": 20, "resets_at": None},
+        ]}
+        live = {"status": "ok", "source": "oauth", "windows": [
+            {"id": "claude-extra-usage", "label": "Extra Usage", "used_percent": 78, "resets_at": None},
+        ]}
+        result = MODULE.merge_claude_usage(live, desktop)
+        self.assertEqual([window["label"] for window in result["windows"]],
+                         ["5 Stunden", "Wöchentlich", "Extra Usage"])
+        self.assertEqual(result["source"], "oauth+claude-desktop")
 
     def test_widget_snapshot_exposes_all_windows_without_credentials(self):
         app = object.__new__(MODULE.App)
