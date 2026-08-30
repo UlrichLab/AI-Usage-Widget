@@ -186,13 +186,23 @@ def get_cursor():
 
 class Bar(tk.Canvas):
     def __init__(self,parent,width=340,height=8):
-        super().__init__(parent,width=width,height=height,highlightthickness=0,bg="#f4f4f4"); self.w=width; self.h=height
+        super().__init__(parent,width=width,height=height,highlightthickness=0,bg="#f4f4f4")
+        self.w=width; self.h=height; self.value=None; self.color=None
+        self.bind("<Configure>",lambda event:self._draw(event.width))
     def set(self,r):
-        self.delete("all"); self.create_rectangle(0,0,self.w,self.h,fill="#e5e7eb",outline="")
-        n=clamp(r)
-        if n is None:return
-        col="#22c55e" if n>=30 else ("#f59e0b" if n>=10 else "#ef4444")
-        self.create_rectangle(0,0,self.w*n/100,self.h,fill=col,outline="")
+        self.value=clamp(r)
+        self.color=None
+        self._draw()
+    def set_fraction(self,value,color):
+        self.value=clamp(value)
+        self.color=color
+        self._draw()
+    def _draw(self,width=None):
+        width=max(1,width or self.winfo_width() or self.w)
+        self.delete("all"); self.create_rectangle(0,0,width,self.h,fill="#e5e7eb",outline="")
+        if self.value is None:return
+        col=self.color or ("#22c55e" if self.value>=30 else ("#f59e0b" if self.value>=10 else "#ef4444"))
+        self.create_rectangle(0,0,width*self.value/100,self.h,fill=col,outline="")
 
 class UsageWindowRow(ttk.Frame):
     def __init__(self,parent):
@@ -295,11 +305,9 @@ class ModelUsageRow(ttk.Frame):
         if cost is not None and cost > 0: bits.append(f"${cost/100:.2f}")
         self.stats.config(text=" · ".join(bits))
         # Here the bar represents consumption share, so larger = more consumption.
-        self.bar.delete("all")
-        self.bar.create_rectangle(0,0,self.bar.w,self.bar.h,fill="#e5e7eb",outline="")
         n=max(0,min(100,share))
         col="#22c55e" if n<30 else ("#f59e0b" if n<60 else "#ef4444")
-        self.bar.create_rectangle(0,0,self.bar.w*n/100,self.bar.h,fill=col,outline="")
+        self.bar.set_fraction(n,col)
 
 class CursorCard(ttk.Frame):
     def __init__(self,p,on_toggle):
