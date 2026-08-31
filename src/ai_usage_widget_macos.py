@@ -265,13 +265,18 @@ def get_claude_desktop():
         values=sample.get("u") or {}
     except Exception:
         return {"status":"error","message":"Claude Desktop: keine Usage-Daten"}
-    # A five-hour rolling limit becomes misleading if Desktop has not refreshed
-    # its cache for a long time. Ask the user to open Claude instead.
-    if time.time()-captured>1800:
-        return {"status":"error","message":"Claude Desktop öffnen zum Aktualisieren"}
     result=normalize_claude_desktop(values)
     if result.get("status")!="ok":
         return {"status":"error","message":"Claude Desktop: keine Quota-Daten","windows":[]}
+    age=max(0,time.time()-captured)
+    if age>1800:
+        captured_text=datetime.fromtimestamp(captured,tz=timezone.utc).astimezone().strftime("%d.%m.%Y %H:%M")
+        result.update(
+            stale=True,
+            captured_at=captured,
+            source="claude-desktop-cache",
+            message=f"Gespeicherter Claude-Stand vom {captured_text}",
+        )
     return result
 
 def merge_claude_usage(live,desktop):
@@ -279,13 +284,23 @@ def merge_claude_usage(live,desktop):
     if desktop.get("status")!="ok":return live
     windows=[dict(window) for window in desktop.get("windows") or []]
     positions={window.get("id"):index for index,window in enumerate(windows)}
-    for window in live.get("windows") or []:
+    live_windows=live.get("windows") or []
+    live_ids={window.get("id") for window in live_windows}
+    stale_desktop_windows=bool(desktop.get("stale") and any(
+        window.get("id") not in live_ids for window in desktop.get("windows") or []))
+    for window in live_windows:
         window_id=window.get("id")
         if window_id in positions:windows[positions[window_id]]=dict(window)
         else:
             positions[window_id]=len(windows)
             windows.append(dict(window))
     result=dict(live); result["windows"]=windows; result["source"]="oauth+claude-desktop"
+    if stale_desktop_windows:
+        result.update(
+            stale=True,
+            captured_at=desktop.get("captured_at"),
+            message=desktop.get("message") or "Teilweise gespeicherter Claude-Stand",
+        )
     valid=[window for window in windows if num(window.get("used_percent")) is not None]
     if valid:
         tightest=max(valid,key=lambda window:window["used_percent"])
@@ -491,6 +506,9 @@ class UsageCard(ttk.Frame):
         if not windows:
             ttk.Label(self.body,text=data.get("message","Keine Daten"),foreground=SECONDARY_TEXT).pack(fill="x")
             return None
+        if data.get("stale"):
+            ttk.Label(self.body,text=data.get("message") or "Gespeicherter Stand",
+                      foreground=SECONDARY_TEXT).pack(fill="x",pady=(0,5))
         remaining=[]
         for index,window in enumerate(windows):
             if index:
@@ -792,7 +810,7 @@ class App:
             "codexRemaining":remain(codex.get("used")),
             "cursorRemaining":min(cursor_remaining) if cursor_remaining else None,
             "providers":[
-                {"id":"claude","title":"Claude","windows":public_windows(claude)},
+                {"id":"claude","title":"Claude · gespeichert" if claude.get("stale") else "Claude","windows":public_windows(claude)},
                 {"id":"chatgpt","title":"ChatGPT","windows":public_windows(codex)},
                 {"id":"cursor","title":"Cursor","windows":cursor_windows},
             ],
