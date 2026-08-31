@@ -30,9 +30,9 @@ class ClaudeDesktopUsageTests(unittest.TestCase):
             with patch.dict(os.environ, {"CLAUDE_DESKTOP_DATA_DIR": directory}):
                 result = MODULE.get_claude_desktop()
         self.assertEqual(result["status"], "ok")
-        self.assertEqual(result["label"], "Wöchentlich")
+        self.assertEqual(result["label"], "Weekly")
         self.assertEqual(result["used"], 37)
-        self.assertEqual([window["label"] for window in result["windows"]], ["5 Stunden", "Wöchentlich"])
+        self.assertEqual([window["label"] for window in result["windows"]], ["5 hours", "Weekly"])
 
     def test_uses_stale_desktop_limit_as_marked_fallback(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -42,7 +42,7 @@ class ClaudeDesktopUsageTests(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
         self.assertTrue(result["stale"])
         self.assertEqual(result["source"], "claude-desktop-cache")
-        self.assertIn("Gespeicherter Claude-Stand", result["message"])
+        self.assertIn("Saved Claude status", result["message"])
 
     def test_account_identity_helpers(self):
         self.assertEqual(
@@ -86,21 +86,21 @@ class ClaudeDesktopUsageTests(unittest.TestCase):
 
     def test_oauth_extras_are_merged_with_desktop_windows(self):
         desktop = {"status": "ok", "source": "claude-desktop", "windows": [
-            {"id": "claude-session-5h", "label": "5 Stunden", "used_percent": 10, "resets_at": None},
-            {"id": "claude-weekly", "label": "Wöchentlich", "used_percent": 20, "resets_at": None},
+            {"id": "claude-session-5h", "label": "5 hours", "used_percent": 10, "resets_at": None},
+            {"id": "claude-weekly", "label": "Weekly", "used_percent": 20, "resets_at": None},
         ]}
         live = {"status": "ok", "source": "oauth", "windows": [
             {"id": "claude-extra-usage", "label": "Extra Usage", "used_percent": 78, "resets_at": None},
         ]}
         result = MODULE.merge_claude_usage(live, desktop)
         self.assertEqual([window["label"] for window in result["windows"]],
-                         ["5 Stunden", "Wöchentlich", "Extra Usage"])
+                         ["5 hours", "Weekly", "Extra Usage"])
         self.assertEqual(result["source"], "oauth+claude-desktop")
 
     def test_stale_desktop_only_windows_mark_merged_result(self):
         desktop = {"status": "ok", "stale": True, "captured_at": 123,
-                   "message": "Gespeicherter Claude-Stand", "windows": [
-                       {"id": "claude-session-5h", "label": "5 Stunden",
+                   "message": "Saved Claude status", "windows": [
+                       {"id": "claude-session-5h", "label": "5 hours",
                         "used_percent": 10, "resets_at": None},
                    ]}
         live = {"status": "ok", "source": "oauth", "windows": [
@@ -118,20 +118,20 @@ class ClaudeDesktopUsageTests(unittest.TestCase):
                        "secret": "never-export",
                        "email": "private@example.com", "account_id": "private-id",
                        "windows": [
-                           {"id": "session", "label": "5 Stunden", "type": "session",
+                           {"id": "session", "label": "5 hours", "type": "session",
                             "used_percent": 12, "resets_at": "2026-09-01T00:00:00Z"},
-                           {"id": "weekly", "label": "Wöchentlich", "type": "weekly",
+                           {"id": "weekly", "label": "Weekly", "type": "weekly",
                             "used_percent": 44, "resets_at": None},
                        ]},
             "codex": {"status": "ok", "windows": [
-                {"id": "weekly", "label": "Wöchentlich", "type": "weekly",
+                {"id": "weekly", "label": "Weekly", "type": "weekly",
                  "used_percent": 35, "resets_at": 1788726221},
             ]},
             "cursor": {"status": "ok", "cursor_models_used": 7, "other_models_used": 9},
         }
         snapshot = app.widget_snapshot()
         self.assertEqual(len(snapshot["providers"][0]["windows"]), 2)
-        self.assertEqual(snapshot["providers"][0]["title"], "Claude · gespeichert")
+        self.assertEqual(snapshot["providers"][0]["title"], "Claude · saved")
         self.assertEqual(snapshot["providers"][1]["windows"][0]["resetsAt"], "1788726221")
         self.assertNotIn("never-export", json.dumps(snapshot))
         self.assertNotIn("private@example.com", json.dumps(snapshot))

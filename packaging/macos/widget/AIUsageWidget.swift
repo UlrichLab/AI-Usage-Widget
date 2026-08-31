@@ -69,12 +69,12 @@ struct UsageProvider: TimelineProvider {
             updated: "", claudeRemaining: 72, codexRemaining: 94, cursorRemaining: 37,
             providers: [
                 WidgetProviderUsage(id: "claude", title: "Claude", windows: [
-                    WidgetUsageWindow(id: "claude-session", label: "5 Stunden", usedPercent: 28, resetsAt: nil, type: "session"),
-                    WidgetUsageWindow(id: "claude-week", label: "Wöchentlich", usedPercent: 22, resetsAt: nil, type: "weekly")
+                    WidgetUsageWindow(id: "claude-session", label: "5 hours", usedPercent: 28, resetsAt: nil, type: "session"),
+                    WidgetUsageWindow(id: "claude-week", label: "Weekly", usedPercent: 22, resetsAt: nil, type: "weekly")
                 ]),
                 WidgetProviderUsage(id: "codex", title: "ChatGPT", windows: [
-                    WidgetUsageWindow(id: "codex-session", label: "5 Stunden", usedPercent: 6, resetsAt: nil, type: "session"),
-                    WidgetUsageWindow(id: "codex-week", label: "Wöchentlich", usedPercent: 20, resetsAt: nil, type: "weekly")
+                    WidgetUsageWindow(id: "codex-session", label: "5 hours", usedPercent: 6, resetsAt: nil, type: "session"),
+                    WidgetUsageWindow(id: "codex-week", label: "Weekly", usedPercent: 20, resetsAt: nil, type: "weekly")
                 ]),
                 WidgetProviderUsage(id: "cursor", title: "Cursor", windows: [
                     WidgetUsageWindow(id: "cursor-models", label: "Cursor Models", usedPercent: 5, resetsAt: nil, type: "model")
@@ -126,7 +126,7 @@ struct UsageBar: View {
             HStack {
                 Text(title).font(.headline).fontWeight(.bold).lineLimit(1)
                 Spacer()
-                Text(remaining.map { "\(Int($0.rounded())) % frei" } ?? "—")
+                Text(remaining.map { "\(Int($0.rounded())) % free" } ?? "—")
                     .font(.headline).fontWeight(.bold)
             }
             GeometryReader { geometry in
@@ -151,7 +151,7 @@ struct DynamicUsageRow: View {
                 Text("\(provider) · \(window.label)")
                     .font(.caption).fontWeight(.semibold).lineLimit(1)
                 Spacer(minLength: 4)
-                Text("\(Int(window.remaining.rounded())) % frei")
+                Text("\(Int(window.remaining.rounded())) % free")
                     .font(.subheadline).fontWeight(.bold).lineLimit(1)
             }
             GeometryReader { geometry in
@@ -244,7 +244,7 @@ struct AIUsageWidgetView: View {
                                             showReset: family == .systemLarge)
                         }
                         if allWindows.count > maximum {
-                            Text("+ \(allWindows.count - maximum) weitere Limits")
+                            Text("+ \(allWindows.count - maximum) more limits")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                     }
@@ -252,7 +252,7 @@ struct AIUsageWidgetView: View {
             } else {
                 VStack {
                     Spacer()
-                    Text("App öffnen, um Usage-Daten zu laden")
+                    Text("Open the app to load usage data")
                         .font(.caption).foregroundStyle(.secondary)
                     Spacer()
                 }
@@ -271,7 +271,7 @@ struct AIUsageWidget: Widget {
             AIUsageWidgetView(entry: entry)
         }
         .configurationDisplayName("AI Usage")
-        .description("Zeigt dynamische Nutzungsfenster von Claude, ChatGPT und Cursor.")
+        .description("Shows dynamic usage windows from Claude, ChatGPT, and Cursor.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }

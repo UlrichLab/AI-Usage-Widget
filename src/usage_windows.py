@@ -63,21 +63,21 @@ def duration_label(seconds, fallback="Limit"):
         return fallback
     rounded = int(round(seconds))
     if rounded == 18000:
-        return "5 Stunden"
+        return "5 hours"
     if rounded == 604800:
-        return "Wöchentlich"
+        return "Weekly"
     if rounded % 86400 == 0:
         days = rounded // 86400
         if days == 1:
-            return "Täglich"
+            return "Daily"
         if 28 <= days <= 31:
-            return "Monatlich"
-        return f"{days} Tage"
+            return "Monthly"
+        return f"{days} days"
     if rounded % 3600 == 0:
         hours = rounded // 3600
-        return f"{hours} Stunden"
+        return f"{hours} hours"
     minutes = max(1, rounded // 60)
-    return f"{minutes} Minuten"
+    return f"{minutes} minutes"
 
 
 def make_window(window_id, label, window_type, used_percent, resets_at=None,
@@ -111,7 +111,7 @@ def sort_windows(windows):
 def provider_result(windows, source, plan=None, **metadata):
     windows = sort_windows(windows)
     if not windows:
-        return {"status": "error", "message": "Keine Quota-Daten", "windows": [], "source": source}
+        return {"status": "error", "message": "No quota data", "windows": [], "source": source}
     first = tightest_window(windows) or windows[0]
     result = {
         "status": "ok",
@@ -169,10 +169,10 @@ def normalize_claude_usage(data):
 
     windows = []
     fixed = [
-        ("five_hour", "claude-session-5h", "5 Stunden", "session", None),
-        ("seven_day", "claude-weekly", "Wöchentlich", "weekly", None),
-        ("seven_day_sonnet", "claude-weekly-sonnet", "Sonnet · Wöchentlich", "model", "Sonnet"),
-        ("seven_day_opus", "claude-weekly-opus", "Opus · Wöchentlich", "model", "Opus"),
+        ("five_hour", "claude-session-5h", "5 hours", "session", None),
+        ("seven_day", "claude-weekly", "Weekly", "weekly", None),
+        ("seven_day_sonnet", "claude-weekly-sonnet", "Sonnet · Weekly", "model", "Sonnet"),
+        ("seven_day_opus", "claude-weekly-opus", "Opus · Weekly", "model", "Opus"),
     ]
     consumed_keys = {item[0] for item in fixed}
     for key, window_id, label, window_type, model in fixed:
@@ -207,7 +207,7 @@ def normalize_claude_usage(data):
             if slug(model_name) == "all-models" or identity_slug == "all-models" or identity_slug.endswith("-all-models"):
                 continue
             window_id = f"claude-weekly-scoped-{identity_slug}"
-            window = make_window(window_id, f"{model_name} · Wöchentlich", "model",
+            window = make_window(window_id, f"{model_name} · Weekly", "model",
                                  limit.get("percent", limit.get("utilization")), limit.get("resets_at"), 604800,
                                  model=model_name, scope=identity)
         elif kind in {"session", "weekly_all"}:
@@ -221,8 +221,8 @@ def normalize_claude_usage(data):
             window_type = "monthly" if group == "monthly" else "daily" if group == "daily" else "weekly" if group == "weekly" else "other"
             label = display_name(model_name or kind or group)
             if window_type == "weekly" and model_name:
-                label = f"{model_name} · Wöchentlich"
-            window = make_window(window_id, label or "Claude-Limit", window_type,
+                label = f"{model_name} · Weekly"
+            window = make_window(window_id, label or "Claude limit", window_type,
                                  limit.get("percent", limit.get("utilization")), limit.get("resets_at"),
                                  model=model_name, scope=identity)
         if window and window["id"] not in seen_ids:
@@ -249,8 +249,8 @@ def normalize_claude_usage(data):
         inferred_type = "weekly" if key.startswith("seven_day") else "daily" if "daily" in key else "other"
         label = display_name(key.removeprefix("seven_day_"))
         if inferred_type == "weekly":
-            label = f"{label} · Wöchentlich" if label else "Wöchentlich"
-        window = make_window(window_id, label or "Claude-Limit", inferred_type,
+            label = f"{label} · Weekly" if label else "Weekly"
+        window = make_window(window_id, label or "Claude limit", inferred_type,
                              utilization, raw.get("resets_at"),
                              604800 if inferred_type == "weekly" else None, scope=key)
         if window:
@@ -288,20 +288,20 @@ def normalize_claude_desktop(values):
     if not isinstance(values, dict):
         return provider_result([], "claude-desktop")
     definitions = {
-        "fh": ("claude-session-5h", "5 Stunden", "session", None),
-        "sd": ("claude-weekly", "Wöchentlich", "weekly", None),
-        "sn": ("claude-weekly-sonnet", "Sonnet · Wöchentlich", "model", "Sonnet"),
-        "so": ("claude-weekly-opus", "Opus · Wöchentlich", "model", "Opus"),
-        "oa": ("claude-weekly-oauth", "OAuth Apps · Wöchentlich", "model", "OAuth Apps"),
+        "fh": ("claude-session-5h", "5 hours", "session", None),
+        "sd": ("claude-weekly", "Weekly", "weekly", None),
+        "sn": ("claude-weekly-sonnet", "Sonnet · Weekly", "model", "Sonnet"),
+        "so": ("claude-weekly-opus", "Opus · Weekly", "model", "Opus"),
+        "oa": ("claude-weekly-oauth", "OAuth Apps · Weekly", "model", "OAuth Apps"),
         "cw": ("claude-routines", "Daily Routines", "model", None),
-        "om": ("claude-weekly-other", "Claude · Wöchentlich", "model", "Claude"),
+        "om": ("claude-weekly-other", "Claude · Weekly", "model", "Claude"),
         "op": ("claude-promotion", "Claude Promotion", "other", None),
         "xu": ("claude-extra-usage", "Extra Usage", "monthly", None),
     }
     windows = []
     for key, value in values.items():
         window_id, label, window_type, model = definitions.get(
-            key, (f"claude-desktop-{slug(key)}", display_name(key) or "Claude-Limit", "other", None))
+            key, (f"claude-desktop-{slug(key)}", display_name(key) or "Claude limit", "other", None))
         window = make_window(window_id, label, window_type, value, model=model, scope=key)
         if window:
             windows.append(window)

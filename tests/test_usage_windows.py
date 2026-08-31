@@ -34,7 +34,7 @@ class ClaudeUsageWindowTests(unittest.TestCase):
             "seven_day": {"utilization": 37},
             "seven_day_sonnet": {"utilization": 55},
         })
-        self.assertEqual(result["windows"][2]["label"], "Sonnet · Wöchentlich")
+        self.assertEqual(result["windows"][2]["label"], "Sonnet · Weekly")
 
     def test_session_week_and_opus(self):
         result = normalize_claude_usage({
@@ -55,7 +55,7 @@ class ClaudeUsageWindowTests(unittest.TestCase):
             ],
         })
         labels = [window["label"] for window in result["windows"]]
-        self.assertEqual(labels, ["5 Stunden", "Fable · Wöchentlich", "Research · Wöchentlich"])
+        self.assertEqual(labels, ["5 hours", "Fable · Weekly", "Research · Weekly"])
 
     def test_missing_fields_do_not_create_zero_percent_windows(self):
         result = normalize_claude_usage({
@@ -78,7 +78,7 @@ class ClaudeUsageWindowTests(unittest.TestCase):
                 "locked_reason": None,
             },
         })
-        self.assertEqual([window["label"] for window in result["windows"]], ["5 Stunden"])
+        self.assertEqual([window["label"] for window in result["windows"]], ["5 hours"])
 
     def test_unknown_new_scope_is_preserved(self):
         result = normalize_claude_usage({
@@ -94,7 +94,7 @@ class ClaudeUsageWindowTests(unittest.TestCase):
             "limits": [{"type": "weekly_scoped", "group": "weekly", "utilization": 31,
                         "scope": "new-model"}],
         })
-        self.assertEqual(result["windows"][0]["label"], "New Model · Wöchentlich")
+        self.assertEqual(result["windows"][0]["label"], "New Model · Weekly")
         self.assertEqual(result["windows"][0]["used_percent"], 31)
 
     def test_desktop_cache_keeps_every_available_lane(self):
@@ -124,7 +124,7 @@ class CodexUsageWindowTests(unittest.TestCase):
                 "limit_window_seconds": 30 * 86400,
             }},
         })
-        self.assertEqual(result["windows"][0]["label"], "Monatlich")
+        self.assertEqual(result["windows"][0]["label"], "Monthly")
         self.assertEqual(result["windows"][0]["type"], "monthly")
 
     def test_duration_controls_labels_and_order(self):
@@ -135,7 +135,7 @@ class CodexUsageWindowTests(unittest.TestCase):
                 "secondary_window": {"used_percent": 17, "limit_window_seconds": 18000},
             },
         })
-        self.assertEqual([window["label"] for window in result["windows"]], ["5 Stunden", "Wöchentlich"])
+        self.assertEqual([window["label"] for window in result["windows"]], ["5 hours", "Weekly"])
         self.assertEqual(result["plan"], "pro")
 
     def test_additional_model_limits_are_dynamic_and_lossy(self):
@@ -152,9 +152,9 @@ class CodexUsageWindowTests(unittest.TestCase):
         })
         labels = [window["label"] for window in result["windows"]]
         self.assertEqual(labels, [
-            "5 Stunden",
-            "GPT-5.3-Codex-Spark · 5 Stunden",
-            "GPT-5.3-Codex-Spark · Wöchentlich",
+            "5 hours",
+            "GPT-5.3-Codex-Spark · 5 hours",
+            "GPT-5.3-Codex-Spark · Weekly",
         ])
 
 

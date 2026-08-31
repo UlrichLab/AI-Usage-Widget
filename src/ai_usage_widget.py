@@ -75,8 +75,8 @@ def account_display(data):
     if email:return email
     account_id=data.get("account_id")
     if account_id:return f"ID: {account_id}"
-    if data.get("status")=="ok":return "Angemeldet · Adresse nicht verfügbar"
-    return data.get("message") or "Nicht angemeldet"
+    if data.get("status")=="ok":return "Signed in · address unavailable"
+    return data.get("message") or "Not signed in"
 
 def request_json(url,headers=None,method="GET",body=None,timeout=15):
     data=None
@@ -152,22 +152,22 @@ def get_claude_desktop():
             if not isinstance(values,dict):continue
             if latest is None or captured>latest[0]:latest=(captured,values)
         except Exception:continue
-    if latest is None:return {"status":"error","message":"Claude Desktop: keine Usage-Daten","windows":[]}
+    if latest is None:return {"status":"error","message":"Claude Desktop: no usage data","windows":[]}
     captured,values=latest
     if time.time()-captured>1800:
-        return {"status":"error","message":"Claude Desktop öffnen zum Aktualisieren","windows":[]}
+        return {"status":"error","message":"Open Claude Desktop to refresh","windows":[]}
     result=normalize_claude_desktop(values)
-    if result.get("status")!="ok":return {"status":"error","message":"Claude Desktop: keine Quota-Daten","windows":[]}
+    if result.get("status")!="ok":return {"status":"error","message":"Claude Desktop: no quota data","windows":[]}
     return result
 
 def get_claude():
     desktop=get_claude_desktop()
     c=claude_credentials()
-    if not isinstance(c,dict):return desktop if desktop.get("status")=="ok" else {"status":"error","message":"Nicht angemeldet"}
+    if not isinstance(c,dict):return desktop if desktop.get("status")=="ok" else {"status":"error","message":"Not signed in"}
     oauth=c.get("claudeAiOauth") or {}
     token=_CLAUDE_OAUTH_CACHE.get("access_token") or oauth.get("accessToken")
-    if not token:return desktop if desktop.get("status")=="ok" else {"status":"error","message":"OAuth-Token fehlt"}
-    if time.time()<_CLAUDE_OAUTH_RETRY_AT:return desktop if desktop.get("status")=="ok" else {"status":"error","message":"Claude OAuth wird gerade gedrosselt"}
+    if not token:return desktop if desktop.get("status")=="ok" else {"status":"error","message":"OAuth token missing"}
+    if time.time()<_CLAUDE_OAUTH_RETRY_AT:return desktop if desktop.get("status")=="ok" else {"status":"error","message":"Claude OAuth is currently rate-limited"}
     headers=claude_headers(token)
     expires_at=num(oauth.get("expiresAt"))
     if expires_at is not None and expires_at>1e11:expires_at/=1000
@@ -179,7 +179,7 @@ def get_claude():
     if st!=200 or not isinstance(d,dict):
         if st==429:globals()["_CLAUDE_OAUTH_RETRY_AT"]=time.time()+900
         if desktop.get("status")=="ok":return desktop
-        if st==429:return {"status":"error","message":"Claude OAuth wird gedrosselt; Claude Desktop öffnen"}
+        if st==429:return {"status":"error","message":"Claude OAuth is rate-limited; open Claude Desktop"}
         return {"status":"error","message":f"HTTP {st or 'ERR'}"}
     result=normalize_claude_usage(d)
     pst,profile,_=request_json(CLAUDE_PROFILE_URL,headers)
@@ -192,8 +192,8 @@ def get_codex():
     try:
         a=json.loads(p.read_text(encoding="utf-8")); t=a.get("tokens") or {}
         token=t.get("access_token"); aid=t.get("account_id"); iid=t.get("id_token")
-    except Exception:return {"status":"error","message":"Nicht angemeldet"}
-    if not token:return {"status":"error","message":"Access-Token fehlt"}
+    except Exception:return {"status":"error","message":"Not signed in"}
+    if not token:return {"status":"error","message":"Access token missing"}
     h={"Authorization":f"Bearer {token}","User-Agent":"codex-cli"}
     if aid:h["ChatGPT-Account-Id"]=aid
     st,d,_=request_json(CODEX_URL,h)
@@ -335,13 +335,13 @@ class UsageWindowRow(ttk.Frame):
         used=window.get("used_percent")
         remaining=remain(used)
         self.label.config(text=window.get("label") or "Limit")
-        self.badge.config(text=f"{pt(remaining)} frei" if remaining is not None else "—")
+        self.badge.config(text=f"{pt(remaining)} free" if remaining is not None else "—")
         extra=""
         if window.get("used_minor") is not None or window.get("limit_minor") is not None:
             exponent=window.get("exponent",2)
             extra=f" · {money_minor(window.get('used_minor'),exponent)}/{money_minor(window.get('limit_minor'),exponent)}"
-        self.stats.config(text=f"{pt(used)} verbraucht · {pt(remaining)} verbleibend{extra}")
-        self.reset.config(text=reset_text(window.get("resets_at")) or "Reset: vom Anbieter nicht gemeldet")
+        self.stats.config(text=f"{pt(used)} used · {pt(remaining)} remaining{extra}")
+        self.reset.config(text=reset_text(window.get("resets_at")) or "Reset: not reported by provider")
         self.bar.set(remaining)
         return remaining
 
@@ -362,7 +362,7 @@ class UsageCard(ttk.Frame):
         if not windows and data.get("used") is not None:
             windows=[{"id":"legacy","label":data.get("label","Limit"),"used_percent":data.get("used"),"resets_at":data.get("reset")}]
         if not windows:
-            ttk.Label(self.body,text=data.get("message","Keine Daten"),foreground=SECONDARY_TEXT).pack(fill="x")
+            ttk.Label(self.body,text=data.get("message","No data"),foreground=SECONDARY_TEXT).pack(fill="x")
             return None
         remaining=[]
         for index,window in enumerate(windows):
@@ -426,7 +426,7 @@ class ModelUsageRow(ttk.Frame):
         self.bar.grid(row=1,column=0,columnspan=2,sticky="ew",pady=(2,7))
     def set(self,name,share,requests,weighted,cost):
         self.name.config(text=name)
-        bits=[f"{share:.1f}% Anteil"]
+        bits=[f"{share:.1f}% share"]
         if weighted is not None: bits.append(f"Usage {weighted:.1f}")
         if requests is not None: bits.append(f"{int(requests)} Req.")
         if cost is not None and cost > 0: bits.append(f"${cost/100:.2f}")
@@ -447,9 +447,9 @@ class CursorCard(ttk.Frame):
         head=ttk.Frame(self); head.grid(row=0,column=0,sticky="ew"); head.columnconfigure(0,weight=1)
         ttk.Label(head,text="Cursor",font=("Segoe UI",14,"bold")).grid(row=0,column=0,sticky="w")
         buttons=ttk.Frame(head); buttons.grid(row=0,column=1,sticky="e")
-        self.table_btn=ttk.Button(buttons,text="Modelldetails ▾",command=self.flip_table)
+        self.table_btn=ttk.Button(buttons,text="Model details ▾",command=self.flip_table)
         self.table_btn.pack(side="left",padx=(0,4))
-        self.usage_btn=ttk.Button(buttons,text="Modellverbrauch ▾",command=self.flip_usage)
+        self.usage_btn=ttk.Button(buttons,text="Model usage ▾",command=self.flip_usage)
         self.usage_btn.pack(side="left")
 
         self.overall=ttk.Label(self,text="",foreground=SECONDARY_TEXT); self.overall.grid(row=1,column=0,sticky="w",pady=(3,6))
@@ -463,7 +463,7 @@ class CursorCard(ttk.Frame):
 
         self.table_frame=ttk.Frame(self)
         self.tree=ttk.Treeview(self.table_frame,columns=("model","requests","weighted","cost"),show="headings",height=7)
-        for key,title,width in [("model","Modell",160),("requests","Requests",65),("weighted","Usage",65),("cost","Kosten*",75)]:
+        for key,title,width in [("model","Model",160),("requests","Requests",65),("weighted","Usage",65),("cost","Cost*",75)]:
             self.tree.heading(key,text=title)
             self.tree.column(key,width=width,anchor="w" if key=="model" else "e")
         sb=ttk.Scrollbar(self.table_frame,orient="vertical",command=self.tree.yview)
@@ -497,21 +497,21 @@ class CursorCard(ttk.Frame):
 
     def flip_table(self):
         self.table_expanded=not self.table_expanded
-        self.table_btn.config(text="Modelldetails ▴" if self.table_expanded else "Modelldetails ▾")
+        self.table_btn.config(text="Model details ▴" if self.table_expanded else "Model details ▾")
         self.relayout()
 
     def flip_usage(self):
         self.usage_expanded=not self.usage_expanded
-        self.usage_btn.config(text="Modellverbrauch ▴" if self.usage_expanded else "Modellverbrauch ▾")
+        self.usage_btn.config(text="Model usage ▴" if self.usage_expanded else "Model usage ▾")
         self.relayout()
 
     def set(self,d):
         cmu=d.get("cursor_models_used"); omu=d.get("other_models_used"); tot=d.get("total_used")
         cmr=remain(cmu); omr=remain(omu)
-        self.cmstat.config(text=f"{pt(cmu)} verbraucht · {pt(cmr)} frei"); self.cmb.set(cmr)
-        self.omstat.config(text=f"{pt(omu)} verbraucht · {pt(omr)} frei"); self.omb.set(omr)
-        self.overall.config(text=f"Gesamtindikator: {pt(tot)} verbraucht · {pt(remain(tot))} verbleibend" if tot is not None else "Zwei getrennte Nutzungspools")
-        self.reset.config(text=reset_text(d.get("reset")) or "Reset: nicht gemeldet")
+        self.cmstat.config(text=f"{pt(cmu)} used · {pt(cmr)} free"); self.cmb.set(cmr)
+        self.omstat.config(text=f"{pt(omu)} used · {pt(omr)} free"); self.omb.set(omr)
+        self.overall.config(text=f"Overall indicator: {pt(tot)} used · {pt(remain(tot))} remaining" if tot is not None else "Two separate usage pools")
+        self.reset.config(text=reset_text(d.get("reset")) or "Reset: not reported")
 
         models=d.get("models") or []
         for i in self.tree.get_children(): self.tree.delete(i)
@@ -527,11 +527,11 @@ class CursorCard(ttk.Frame):
                 f"${cost/100:.2f}" if isinstance(cost,(int,float)) and cost>0 else "—"))
 
         if d.get("model_source")=="events":
-            self.table_note.config(text=f"* letzte {d.get('events_pages',0)*100} Usage-Events (max. 500); Usage = gewichtete Cursor-Billing-Units.")
+            self.table_note.config(text=f"* latest {d.get('events_pages',0)*100} usage events (max. 500); usage = weighted Cursor billing units.")
         elif d.get("model_source")=="request-counts":
-            self.table_note.config(text="* Request-Anzahlen für den aktuellen Abrechnungszeitraum.")
+            self.table_note.config(text="* Request counts for the current billing period.")
         else:
-            self.table_note.config(text="Keine Modellaufschlüsselung verfügbar.")
+            self.table_note.config(text="No model breakdown available.")
 
         for child in self.usage_inner.winfo_children(): child.destroy()
         if models:
@@ -549,10 +549,10 @@ class CursorCard(ttk.Frame):
                 cost=cc if cc not in (None,0) else tc
                 row=ModelUsageRow(self.usage_inner); row.pack(fill="x")
                 row.set(m.get("model","Unknown"),share,m.get("requests"),m.get("weighted"),cost)
-            basis_name="gewichteter Usage" if use_weighted else "Requests"
-            self.usage_note.config(text=f"Anteil jedes Modells am erfassten Cursor-Verbrauch, berechnet aus {basis_name}. Die Prozentwerte sind keine separaten Monatslimits.")
+            basis_name="weighted usage" if use_weighted else "requests"
+            self.usage_note.config(text=f"Share of each model in the captured Cursor usage, calculated from {basis_name}. These percentages are not separate monthly limits.")
         else:
-            ttk.Label(self.usage_inner,text="Keine Modelldaten verfügbar.",foreground="#777").pack(anchor="w")
+            ttk.Label(self.usage_inner,text="No model data available.",foreground="#777").pack(anchor="w")
             self.usage_note.config(text="")
 
         vals=[v for v in (cmr,omr) if v is not None]
@@ -562,7 +562,7 @@ class AccountsPanel(ttk.Frame):
     def __init__(self,parent,on_toggle):
         super().__init__(parent)
         self.on_toggle=on_toggle; self.expanded=False; self.data={}
-        self.toggle_button=ttk.Button(self,text="Konten ▾",command=self.toggle)
+        self.toggle_button=ttk.Button(self,text="Accounts ▾",command=self.toggle)
         self.toggle_button.pack(anchor="w")
         self.body=ttk.Frame(self)
         self.rows={}
@@ -573,7 +573,7 @@ class AccountsPanel(ttk.Frame):
             value.pack(side="left",fill="x",expand=True); self.rows[key]=value
     def toggle(self):
         self.expanded=not self.expanded
-        self.toggle_button.config(text="Konten ▴" if self.expanded else "Konten ▾")
+        self.toggle_button.config(text="Accounts ▴" if self.expanded else "Accounts ▾")
         if self.expanded:self.body.pack(fill="x",pady=(3,0))
         else:self.body.pack_forget()
         self.on_toggle(self.expanded)
@@ -615,8 +615,8 @@ class App:
         box=d.textbbox((0,0),text,font=font)
         tw,th=box[2]-box[0],box[3]-box[1]
         d.text(((64-tw)/2,(64-th)/2-2),text,fill=(255,255,255,255),font=font)
-        menu=pystray.Menu(pystray.MenuItem("Anzeigen / Ausblenden",self.toggle,default=True),pystray.MenuItem("Jetzt aktualisieren",self.refresh),
-                         pystray.MenuItem("Always on top",self.topmost,checked=lambda i:bool(self.root.attributes("-topmost"))),pystray.Menu.SEPARATOR,pystray.MenuItem("Beenden",self.quit))
+        menu=pystray.Menu(pystray.MenuItem("Show / Hide",self.toggle,default=True),pystray.MenuItem("Refresh now",self.refresh),
+                         pystray.MenuItem("Always on top",self.topmost,checked=lambda i:bool(self.root.attributes("-topmost"))),pystray.Menu.SEPARATOR,pystray.MenuItem("Quit",self.quit))
         self.tray=pystray.Icon("ai_usage_v9",img,"AI Usage",menu)
         if sys.platform=="darwin":
             # The native macOS backend must be attached from the main thread.
@@ -648,14 +648,14 @@ class App:
         cr=self.claude.set_data(c)
         xr=self.codex.set_data(x)
         ur=self.cursor.set(u) if u.get("status")=="ok" else None
-        if u.get("status")!="ok":notes.append("Cursor: "+u.get("message","Keine Daten"))
+        if u.get("status")!="ok":notes.append("Cursor: "+u.get("message","No data"))
         self.accounts.set_data(self.data)
         note_text=" · ".join(notes)
         self.note.config(text=note_text)
         if note_text and not self.note.winfo_manager():self.note.pack(fill="x",pady=(4,0))
         elif not note_text:self.note.pack_forget()
         self.root.after_idle(self.resize_for_usage)
-        if self.tray:self.tray.title=f"Claude {pt(cr)} frei · ChatGPT/Codex {pt(xr)} frei · Cursor knappster Pool {pt(ur)} frei"
+        if self.tray:self.tray.title=f"Claude {pt(cr)} free · ChatGPT/Codex {pt(xr)} free · Cursor tightest pool {pt(ur)} free"
     def resize_for_usage(self):
         self.root.update_idletasks()
         expanded=self.cursor.table_expanded or self.cursor.usage_expanded
