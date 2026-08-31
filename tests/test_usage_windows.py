@@ -1,6 +1,19 @@
+import importlib.util
+import json
+import os
+import tempfile
+import time
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from src.usage_windows import normalize_claude_desktop, normalize_claude_usage, normalize_codex_usage
+
+
+ROOT = Path(__file__).parents[1]
+SPEC = importlib.util.spec_from_file_location("ai_usage_widget_windows_test", ROOT / "src" / "ai_usage_widget.py")
+WINDOWS = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(WINDOWS)
 
 
 class ClaudeUsageWindowTests(unittest.TestCase):
@@ -88,6 +101,19 @@ class ClaudeUsageWindowTests(unittest.TestCase):
         result = normalize_claude_desktop({"fh": 11, "sd": 22, "sn": 33, "new": 44})
         self.assertEqual(len(result["windows"]), 4)
         self.assertEqual(result["source"], "claude-desktop")
+
+    def test_windows_desktop_cache_is_used_when_oauth_is_rate_limited(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "plan-usage-history.json").write_text(json.dumps({
+                "samples": [{"t": int(time.time() * 1000), "u": {"fh": 12, "sd": 34}}]
+            }), encoding="utf-8")
+            with patch.dict(os.environ, {"CLAUDE_DESKTOP_DATA_DIR": directory}), \
+                    patch.object(WINDOWS, "claude_credentials", return_value={"claudeAiOauth": {"accessToken": "token"}}), \
+                    patch.object(WINDOWS, "request_json", return_value=(429, None, "rate limited")):
+                result = WINDOWS.get_claude()
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["source"], "claude-desktop")
+        self.assertEqual(result["windows"][1]["used_percent"], 34)
 
 
 class CodexUsageWindowTests(unittest.TestCase):

@@ -6,9 +6,9 @@ import tkinter as tk
 from tkinter import ttk
 
 try:
-    from usage_windows import normalize_claude_usage, normalize_codex_usage
+    from usage_windows import normalize_claude_desktop, normalize_claude_usage, normalize_codex_usage
 except ImportError:
-    from src.usage_windows import normalize_claude_usage, normalize_codex_usage
+    from src.usage_windows import normalize_claude_desktop, normalize_claude_usage, normalize_codex_usage
 
 APP_NAME="AI Usage Widget"
 APP_VERSION="1.2.0"
@@ -22,6 +22,7 @@ REFRESH_SECONDS=300
 APP_WIDTH=450
 _CLAUDE_OAUTH_CACHE={}
 _CLAUDE_OAUTH_LOCK=threading.Lock()
+_CLAUDE_OAUTH_RETRY_AT=0
 SECONDARY_TEXT="#555"
 
 try:
@@ -121,23 +122,67 @@ def claude_headers(token):
     return {"Authorization":f"Bearer {token}","anthropic-beta":"oauth-2025-04-20",
             "User-Agent":"claude-code/2.1.207","Content-Type":"application/json"}
 
-def get_claude():
+def claude_credentials():
     cred=Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home()/".claude"))/".credentials.json"
-    try:
-        c=json.loads(cred.read_text(encoding="utf-8")); oauth=c.get("claudeAiOauth") or {}
-    except Exception:return {"status":"error","message":"Nicht angemeldet"}
+    try:return json.loads(cred.read_text(encoding="utf-8"))
+    except Exception:return None
+
+def claude_desktop_data_dirs():
+    configured=os.environ.get("CLAUDE_DESKTOP_DATA_DIR")
+    if configured:return [Path(configured)]
+    if sys.platform=="win32":
+        local_app_data=Path(os.environ.get("LOCALAPPDATA") or (Path.home()/"AppData"/"Local"))
+        store_dirs=sorted((local_app_data/"Packages").glob("Claude_*"),key=lambda path:path.stat().st_mtime,reverse=True)
+        return [path/"LocalCache"/"Roaming"/"Claude" for path in store_dirs]+[
+            Path(os.environ.get("APPDATA") or (Path.home()/"AppData"/"Roaming"))/"Claude",
+            local_app_data/"Claude",
+        ]
+    return [Path.home()/"Library"/"Application Support"/"Claude"]
+
+def get_claude_desktop():
+    """Read Claude Desktop's recent, non-sensitive local plan-utilization cache."""
+    latest=None
+    for data_dir in claude_desktop_data_dirs():
+        try:
+            history=json.loads((data_dir/"plan-usage-history.json").read_text(encoding="utf-8"))
+            samples=history.get("samples") or []
+            sample=max((item for item in samples if isinstance(item,dict)),key=lambda item:item.get("t",0))
+            captured=float(sample.get("t"))/1000
+            values=sample.get("u") or {}
+            if not isinstance(values,dict):continue
+            if latest is None or captured>latest[0]:latest=(captured,values)
+        except Exception:continue
+    if latest is None:return {"status":"error","message":"Claude Desktop: keine Usage-Daten","windows":[]}
+    captured,values=latest
+    if time.time()-captured>1800:
+        return {"status":"error","message":"Claude Desktop öffnen zum Aktualisieren","windows":[]}
+    result=normalize_claude_desktop(values)
+    if result.get("status")!="ok":return {"status":"error","message":"Claude Desktop: keine Quota-Daten","windows":[]}
+    return result
+
+def get_claude():
+    desktop=get_claude_desktop()
+    c=claude_credentials()
+    if not isinstance(c,dict):return desktop if desktop.get("status")=="ok" else {"status":"error","message":"Nicht angemeldet"}
+    oauth=c.get("claudeAiOauth") or {}
     token=_CLAUDE_OAUTH_CACHE.get("access_token") or oauth.get("accessToken")
-    if not token:return {"status":"error","message":"OAuth-Token fehlt"}
+    if not token:return desktop if desktop.get("status")=="ok" else {"status":"error","message":"OAuth-Token fehlt"}
+    if time.time()<_CLAUDE_OAUTH_RETRY_AT:return desktop if desktop.get("status")=="ok" else {"status":"error","message":"Claude OAuth wird gerade gedrosselt"}
     headers=claude_headers(token)
-    pst,profile,_=request_json(CLAUDE_PROFILE_URL,headers)
-    if pst in (401,403):
+    expires_at=num(oauth.get("expiresAt"))
+    if expires_at is not None and expires_at>1e11:expires_at/=1000
+    if expires_at is not None and expires_at<=time.time()+30:
         token=refresh_claude_oauth(oauth)
         if token:
             headers=claude_headers(token)
-            pst,profile,_=request_json(CLAUDE_PROFILE_URL,headers)
     st,d,_=request_json(CLAUDE_URL,headers)
-    if st!=200 or not isinstance(d,dict):return {"status":"error","message":f"HTTP {st or 'ERR'}"}
+    if st!=200 or not isinstance(d,dict):
+        if st==429:globals()["_CLAUDE_OAUTH_RETRY_AT"]=time.time()+900
+        if desktop.get("status")=="ok":return desktop
+        if st==429:return {"status":"error","message":"Claude OAuth wird gedrosselt; Claude Desktop öffnen"}
+        return {"status":"error","message":f"HTTP {st or 'ERR'}"}
     result=normalize_claude_usage(d)
+    pst,profile,_=request_json(CLAUDE_PROFILE_URL,headers)
     email=account_email(profile) if pst==200 else None
     if email:result["email"]=email
     return result
