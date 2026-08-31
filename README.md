@@ -23,7 +23,7 @@ The Windows app lives in the system tray. On macOS, the app behaves like a norma
   </tr>
   <tr>
     <td width="50%" align="center" valign="top">
-      <img src="assets/ai-usage-widget-preview.png" alt="AI Usage Widget on Windows" width="100%">
+      <img src="assets/ai-usage-widget-preview.png?v=a77c475" alt="AI Usage Widget on Windows" width="100%">
     </td>
     <td width="50%" align="center" valign="top">
       <img src="assets/ai-usage-widget-macos-app.jpg" alt="AI Usage Widget app on macOS" width="100%"><br><br>
