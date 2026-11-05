@@ -33,7 +33,7 @@ jobs:
         run: python -m pip install -r requirements-macos.txt pyinstaller
 
       - name: Compile application
-        run: python -m py_compile src/ai_usage_widget.py
+        run: python -m py_compile src/ai_usage_widget.py src/local_auth.py src/usage_windows.py
 
       - name: Compile macOS application
         if: runner.os == 'macOS'

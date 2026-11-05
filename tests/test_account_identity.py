@@ -20,6 +20,7 @@ WINDOWS = load_module("ai_usage_widget_identity_windows", "src/ai_usage_widget.p
 class AccountIdentityTests(unittest.TestCase):
     def tearDown(self):
         WINDOWS._CLAUDE_OAUTH_CACHE.clear()
+        WINDOWS._CURSOR_REFRESH = None
 
     def test_claude_profile_email_variants(self):
         self.assertEqual(
@@ -33,16 +34,17 @@ class AccountIdentityTests(unittest.TestCase):
 
     def test_cursor_fetches_identity_without_breaking_usage(self):
         responses = [
-            (200, {"individualUsage": {"plan": {"autoPercentUsed": 7}}}, None),
+            (200, {"planUsage": {"autoPercentUsed": 7, "apiPercentUsed": 3}}, None),
             (200, {"email": "cursor@example.com"}, None),
-            (404, None, "not available"),
-            (404, None, "not available"),
+            (200, {"aggregations": [{"modelIntent": "composer-2", "totalCents": 12.5}]}, None),
         ]
-        with patch.object(WINDOWS, "cursor_session", return_value=("cookie", "user-id", None)), \
+        with patch.object(WINDOWS, "cursor_session", return_value=("cookie", "user-id", None, "token")), \
                 patch.object(WINDOWS, "request_json", side_effect=responses):
             result = WINDOWS.get_cursor()
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["email"], "cursor@example.com")
+        self.assertEqual(result["model_source"], "aggregations")
+        self.assertEqual(result["models"][0]["model"], "composer-2")
 
     def test_claude_refresh_stays_in_memory(self):
         response = (200, {"access_token": "new-access", "refresh_token": "new-refresh"}, None)

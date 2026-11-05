@@ -77,7 +77,7 @@ struct UsageProvider: TimelineProvider {
                     WidgetUsageWindow(id: "codex-week", label: "Weekly", usedPercent: 20, resetsAt: nil, type: "weekly")
                 ]),
                 WidgetProviderUsage(id: "cursor", title: "Cursor", windows: [
-                    WidgetUsageWindow(id: "cursor-models", label: "Cursor Models", usedPercent: 5, resetsAt: nil, type: "model")
+                    WidgetUsageWindow(id: "cursor-models", label: "Cursor Models · Monthly", usedPercent: 5, resetsAt: nil, type: "monthly")
                 ])
             ]))
     }

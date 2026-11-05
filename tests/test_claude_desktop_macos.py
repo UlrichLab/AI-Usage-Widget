@@ -53,16 +53,17 @@ class ClaudeDesktopUsageTests(unittest.TestCase):
 
     def test_cursor_fetches_identity_without_breaking_usage(self):
         responses = [
-            (200, {"individualUsage": {"plan": {"autoPercentUsed": 7}}}, None),
+            (200, {"planUsage": {"autoPercentUsed": 7, "apiPercentUsed": 3}}, None),
             (200, {"email": "cursor-mac@example.com"}, None),
-            (404, None, "not available"),
-            (404, None, "not available"),
+            (200, {"aggregations": [{"modelIntent": "composer-2", "totalCents": 12.5}]}, None),
         ]
-        with patch.object(MODULE, "cursor_session", return_value=("cookie", "user-id", None)), \
+        with patch.object(MODULE, "cursor_session", return_value=("cookie", "user-id", None, "token")), \
                 patch.object(MODULE, "request_json", side_effect=responses):
             result = MODULE.get_cursor()
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["email"], "cursor-mac@example.com")
+        self.assertEqual(result["model_source"], "aggregations")
+        self.assertEqual(result["models"][0]["model"], "composer-2")
 
     def test_expired_claude_access_token_is_refreshed_in_memory(self):
         credentials = {"claudeAiOauth": {"accessToken": "expired", "refreshToken": "refresh"}}

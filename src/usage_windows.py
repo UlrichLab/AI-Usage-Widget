@@ -308,6 +308,21 @@ def normalize_claude_desktop(values):
     return provider_result(windows, "claude-desktop")
 
 
+def _codex_limit_display_name(name):
+    text = " ".join(str(name or "").replace("_", " ").replace("-", " ").split())
+    lowered = text.lower()
+    for prefix in ("chatgpt ", "codex "):
+        if lowered.startswith(prefix):
+            text = text[len(prefix):].strip()
+            break
+    return text or display_name(name)
+
+
+def _codex_keep_additional(used_percent):
+    used = percent(used_percent)
+    return used is not None and used > 0
+
+
 def _codex_window(raw, window_id, label_prefix=None, fallback="Limit", model=None, scope=None):
     if not isinstance(raw, dict):
         return None
@@ -321,7 +336,7 @@ def _codex_window(raw, window_id, label_prefix=None, fallback="Limit", model=Non
 
 
 def normalize_codex_usage(data):
-    """Map Codex core and model-specific rate-limit windows."""
+    """Map Codex core and extra billed rate-limit windows."""
     if not isinstance(data, dict):
         return provider_result([], "oauth")
     windows = []
@@ -344,16 +359,35 @@ def normalize_codex_usage(data):
         nested = entry.get("rate_limit")
         if not name or not identity or not isinstance(nested, dict):
             continue
+        label_prefix = _codex_limit_display_name(name)
         keys = ["primary_window", "secondary_window"]
         keys.extend(key for key in nested if key not in keys and "window" in key)
         for key in keys:
             raw = nested.get(key)
-            seconds = raw.get("limit_window_seconds") if isinstance(raw, dict) else None
+            if not isinstance(raw, dict) or not _codex_keep_additional(raw.get("used_percent")):
+                continue
+            seconds = raw.get("limit_window_seconds")
             duration_identity = slug(duration_label(seconds, key))
             window_id = f"codex-{slug(identity)}-{duration_identity}"
-            window = _codex_window(raw, window_id, name, model=name, scope=identity)
+            window = _codex_window(raw, window_id, label_prefix, model=label_prefix, scope=identity)
             if window and window_id not in seen_ids:
                 windows.append(window)
                 seen_ids.add(window_id)
 
     return provider_result(windows, "oauth", plan=data.get("plan_type"))
+
+
+def normalize_cursor_usage(data):
+    """Map Cursor's monthly included pools. These reset with the billing cycle."""
+    if not isinstance(data, dict):
+        return provider_result([], "cursor")
+    reset = data.get("reset") or data.get("billingCycleEnd")
+    windows = []
+    for window_id, label, key in (
+        ("cursor-models", "Cursor Models · Monthly", "cursor_models_used"),
+        ("cursor-other-models", "Other Models · Monthly", "other_models_used"),
+    ):
+        window = make_window(window_id, label, "monthly", data.get(key), reset, duration_seconds=30 * 86400)
+        if window:
+            windows.append(window)
+    return provider_result(windows, "cursor")

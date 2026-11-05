@@ -11,13 +11,17 @@ try:
         normalize_claude_desktop,
         normalize_claude_usage,
         normalize_codex_usage,
+        normalize_cursor_usage,
     )
+    from local_auth import claude_credentials_payload, is_jwt, read_cursor_auth_json, unwrap_cursor_secret
 except ImportError:
     from src.usage_windows import (
         normalize_claude_desktop,
         normalize_claude_usage,
         normalize_codex_usage,
+        normalize_cursor_usage,
     )
+    from src.local_auth import claude_credentials_payload, is_jwt, read_cursor_auth_json, unwrap_cursor_secret
 
 try:
     import certifi
@@ -32,10 +36,13 @@ CLAUDE_TOKEN_URL="https://platform.claude.com/v1/oauth/token"
 CLAUDE_CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 CODEX_URL="https://chatgpt.com/backend-api/wham/usage"
 CURSOR_BASE="https://cursor.com"
+CURSOR_API2="https://api2.cursor.sh"
+CURSOR_DASHBOARD=CURSOR_API2+"/aiserver.v1.DashboardService"
 REFRESH_SECONDS=300
 APP_WIDTH=450
 _CLAUDE_OAUTH_CACHE={}
 _CLAUDE_OAUTH_LOCK=threading.Lock()
+_CURSOR_REFRESH=None
 WIDGET_PORT=38471
 SECONDARY_TEXT="systemSecondaryLabelColor" if sys.platform=="darwin" else "#555"
 
@@ -125,7 +132,17 @@ def money_minor(v,exp=2):
     except Exception:return "—"
 def parse_reset(v):
     if not v:return None
-    try:return datetime.fromisoformat(v.replace("Z","+00:00")) if isinstance(v,str) else datetime.fromtimestamp(float(v),tz=timezone.utc)
+    try:
+        if isinstance(v,str):
+            text=v.strip()
+            if text.isdigit():
+                stamp=float(text)
+                if stamp>1e12:stamp/=1000
+                return datetime.fromtimestamp(stamp,tz=timezone.utc)
+            return datetime.fromisoformat(text.replace("Z","+00:00"))
+        stamp=float(v)
+        if stamp>1e12:stamp/=1000
+        return datetime.fromtimestamp(stamp,tz=timezone.utc)
     except Exception:return None
 def reset_text(v):
     dt=parse_reset(v)
@@ -192,8 +209,11 @@ def refresh_claude_oauth(oauth):
     if not refresh_token:return None
     with _CLAUDE_OAUTH_LOCK:
         refresh_token=_CLAUDE_OAUTH_CACHE.get("refresh_token") or refresh_token
-        st,data,_=request_form_json(CLAUDE_TOKEN_URL,{
-            "grant_type":"refresh_token","refresh_token":refresh_token,"client_id":CLAUDE_CLIENT_ID})
+        fields={"grant_type":"refresh_token","refresh_token":refresh_token,"client_id":CLAUDE_CLIENT_ID}
+        st,data,_=request_form_json(CLAUDE_TOKEN_URL,fields)
+        if st!=200 or not isinstance(data,dict) or not data.get("access_token"):
+            st,data,_=request_json(CLAUDE_TOKEN_URL,{
+                "Content-Type":"application/json","Accept":"application/json"},"POST",fields)
         if st!=200 or not isinstance(data,dict) or not data.get("access_token"):return None
         _CLAUDE_OAUTH_CACHE["access_token"]=data["access_token"]
         _CLAUDE_OAUTH_CACHE["refresh_token"]=data.get("refresh_token") or refresh_token
@@ -238,20 +258,7 @@ class WidgetDataServer:
             threading.Thread(target=self.server.shutdown,daemon=True).start()
 
 def claude_credentials():
-    cred=Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home()/".claude"))/".credentials.json"
-    try:
-        return json.loads(cred.read_text(encoding="utf-8"))
-    except Exception:
-        pass
-    if sys.platform=="darwin":
-        try:
-            result=subprocess.run(
-                ["/usr/bin/security","find-generic-password","-w","-s","Claude Code-credentials"],
-                check=True,capture_output=True,text=True,timeout=5)
-            return json.loads(result.stdout)
-        except Exception:
-            pass
-    return None
+    return claude_credentials_payload()
 
 def get_claude_desktop():
     """Read Claude Desktop's non-sensitive, locally cached plan utilization."""
@@ -312,6 +319,8 @@ def get_claude():
     if not isinstance(c,dict):return get_claude_desktop()
     oauth=c.get("claudeAiOauth") or {}
     token=_CLAUDE_OAUTH_CACHE.get("access_token") or oauth.get("accessToken")
+    if not token and (oauth.get("refreshToken") or _CLAUDE_OAUTH_CACHE.get("refresh_token")):
+        token=refresh_claude_oauth(oauth)
     if not token:return get_claude_desktop()
     headers=claude_headers(token)
     pst,profile,_=request_json(CLAUDE_PROFILE_URL,headers)
@@ -351,92 +360,218 @@ def cursor_db_path(platform_name=None, env=None, home=None):
     home=Path.home() if home is None else Path(home)
     if platform_name=="darwin":
         return home/"Library"/"Application Support"/"Cursor"/"User"/"globalStorage"/"state.vscdb"
+    if platform_name=="linux":
+        return home/".config"/"Cursor"/"User"/"globalStorage"/"state.vscdb"
     appdata=env.get("APPDATA")
     base=Path(appdata) if appdata else home/"AppData"/"Roaming"
     return base/"Cursor"/"User"/"globalStorage"/"state.vscdb"
 
-def cursor_session():
-    db=cursor_db_path()
-    con=sqlite3.connect(f"file:{db}?mode=ro",uri=True,timeout=2)
-    row=con.execute("SELECT value FROM ItemTable WHERE key=?",("cursorAuth/accessToken",)).fetchone()
-    con.close()
-    if not row:return None,None,None
-    token=row[0]
+def sqlite_readonly(path):
+    """Open Cursor's state DB even when the IDE holds a Windows file lock or the path contains spaces."""
+    path=Path(path)
+    uri=path.resolve().as_uri()+"?mode=ro&immutable=1"
+    try:
+        con=sqlite3.connect(uri,uri=True,timeout=2)
+        con.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+        return con
+    except sqlite3.Error:
+        pass
+    try:
+        con=sqlite3.connect(str(path),timeout=2)
+        con.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+        return con
+    except sqlite3.Error:
+        pass
+    import shutil, tempfile
+    tmp=Path(tempfile.mkdtemp(prefix="ai-usage-cursor-"))/"state.vscdb"
+    shutil.copyfile(path,tmp)
+    for suffix in ("-wal","-shm"):
+        extra=Path(str(path)+suffix)
+        if extra.exists():shutil.copyfile(extra,Path(str(tmp)+suffix))
+    return sqlite3.connect(str(tmp),timeout=2)
+
+def cursor_user_id(sub):
+    if not isinstance(sub,str) or not sub:return ""
+    if "|" in sub:
+        parts=sub.split("|")
+        for part in parts:
+            if part.startswith("user_"):return part
+        return parts[-1]
+    return sub
+
+def cursor_api2_headers(token):
+    return {"Authorization":f"Bearer {token}","Content-Type":"application/json",
+            "Connect-Protocol-Version":"1","User-Agent":"Mozilla/5.0"}
+
+def cursor_plan_result(plan, reset=None, email=None, account_id=None):
+    result={"status":"ok","cursor_models_used":plan.get("autoPercentUsed"),"other_models_used":plan.get("apiPercentUsed"),
+            "total_used":plan.get("totalPercentUsed"),"reset":reset,"models":[],"model_source":None}
+    if result["cursor_models_used"] is None and result["other_models_used"] is None:
+        used=num(plan.get("used")); limit=num(plan.get("limit"))
+        if used is not None and limit not in (None,0):
+            result["total_used"]=max(0,min(100,used/limit*100))
+    if email:result["email"]=email
+    elif account_id:result["account_id"]=account_id
+    return result
+
+def models_from_aggregations(data):
+    rows=data.get("aggregations") if isinstance(data,dict) else None
+    if not isinstance(rows,list):return []
+    models=[]
+    for row in rows:
+        if not isinstance(row,dict):continue
+        name=row.get("modelIntent") or row.get("model") or "Unknown"
+        cents=num(row.get("totalCents"))
+        models.append({"model":name,"requests":num(row.get("eventCount")) or 0,"weighted":cents,
+                       "charged_cents":cents,"token_cents":cents})
+    return [item for item in models if item["model"] and (item["weighted"] or item["requests"])]
+
+def models_from_legacy_usage(data):
+    models=[]
+    for name,val in (data or {}).items():
+        if name in ("startOfMonth","globalRequests") or not isinstance(val,dict):continue
+        nr=val.get("numRequests")
+        if isinstance(nr,(int,float)) and nr>0:
+            models.append({"model":name,"requests":nr,"weighted":None,"charged_cents":None,"token_cents":None})
+    return models
+
+def models_from_events(events):
+    agg={}
+    for ev in events:
+        if not isinstance(ev,dict):continue
+        m=ev.get("model") or "Unknown"
+        a=agg.setdefault(m,{"model":m,"requests":0,"weighted":0.0,"charged_cents":0.0,"token_cents":0.0})
+        a["requests"]+=1
+        rc=num(ev.get("requestsCosts"))
+        if rc is not None:a["weighted"]+=rc
+        cc=num(ev.get("chargedCents"))
+        if cc is not None:a["charged_cents"]+=cc
+        tc=num((ev.get("tokenUsage") or {}).get("totalCents"))
+        if tc is not None:a["token_cents"]+=tc
+    return list(agg.values())
+
+def sort_cursor_models(models):
+    models.sort(key=lambda x:(x.get("weighted") or 0, x.get("charged_cents") or 0, x.get("requests") or 0),reverse=True)
+    return models
+
+def finalize_cursor_result(result):
+    normalized=normalize_cursor_usage(result)
+    if normalized.get("windows"):
+        result["windows"]=normalized["windows"]
+    return result
+
+def cursor_auth_from_token(token, cached_email=None):
     payload=jwt_payload(token)
     sub=payload.get("sub","")
-    uid=sub.rsplit("|",1)[-1]
-    cookie=f"{uid}%3A%3A{token}"
-    return cookie,sub,account_email(payload)
+    uid=cursor_user_id(sub)
+    cookie=f"{uid}%3A%3A{token}" if uid and token else None
+    email=account_email(payload) or cached_email
+    if isinstance(email,str) and "@" not in email:email=None
+    return cookie,sub,email,token
+
+def refresh_cursor_oauth(refresh_token):
+    if not refresh_token:return None
+    st,data,_=request_json(CURSOR_API2+"/oauth/token",{
+        "Content-Type":"application/json","User-Agent":"Mozilla/5.0"},"POST",
+        {"grant_type":"refresh_token","refresh_token":refresh_token})
+    if st!=200 or not isinstance(data,dict) or data.get("shouldLogout"):return None
+    return data.get("access_token") or data.get("accessToken")
+
+def cursor_session():
+    global _CURSOR_REFRESH
+    _CURSOR_REFRESH=None
+    access=refresh=cached_email=None
+    try:
+        con=sqlite_readonly(cursor_db_path())
+        try:
+            rows={key:value for key,value in con.execute(
+                "SELECT key, value FROM ItemTable WHERE key IN (?,?,?)",
+                ("cursorAuth/accessToken","cursorAuth/refreshToken","cursorAuth/cachedEmail"))}
+        finally:
+            con.close()
+        access=unwrap_cursor_secret(rows.get("cursorAuth/accessToken"))
+        refresh=unwrap_cursor_secret(rows.get("cursorAuth/refreshToken"))
+        cached_email=rows.get("cursorAuth/cachedEmail")
+    except Exception:
+        access=None
+    if not access or not is_jwt(access):
+        json_access,json_refresh=read_cursor_auth_json()
+        if json_access:
+            access=json_access
+            refresh=refresh or json_refresh
+    if not access:return None,None,None,None
+    _CURSOR_REFRESH=refresh
+    return cursor_auth_from_token(access,cached_email)
 
 def get_cursor():
-    try:cookie,sub,token_email=cursor_session()
-    except Exception as e:return {"status":"error","message":str(e)}
-    if not cookie:return {"status":"error","message":"Kein Cursor-Login"}
-    hdr={"Cookie":f"WorkosCursorSessionToken={cookie}","User-Agent":"Mozilla/5.0"}
-    st,d,_=request_json(CURSOR_BASE+"/api/usage-summary",hdr)
-    if st!=200 or not isinstance(d,dict):return {"status":"error","message":f"HTTP {st or 'ERR'}"}
-    plan=((d.get("individualUsage") or {}).get("plan")) or {}
-    result={"status":"ok","cursor_models_used":plan.get("autoPercentUsed"),"other_models_used":plan.get("apiPercentUsed"),
-            "total_used":plan.get("totalPercentUsed"),"reset":d.get("billingCycleEnd"),"models":[],"model_source":None}
+    try:cookie,sub,token_email,token=cursor_session()
+    except Exception:return {"status":"error","message":"Could not read the local Cursor session"}
+    if not token:return {"status":"error","message":"Cursor is not signed in"}
+    hdr={"User-Agent":"Mozilla/5.0"}
+    if cookie:hdr["Cookie"]=f"WorkosCursorSessionToken={cookie}"
+    api2=cursor_api2_headers(token)
+
+    st,period,_=request_json(CURSOR_DASHBOARD+"/GetCurrentPeriodUsage",api2,"POST",{})
+    if st in (401,403) and _CURSOR_REFRESH:
+        token=refresh_cursor_oauth(_CURSOR_REFRESH)
+        if token:
+            cookie,sub,token_email,token=cursor_auth_from_token(token,token_email)
+            hdr={"Cookie":f"WorkosCursorSessionToken={cookie}","User-Agent":"Mozilla/5.0"}
+            api2=cursor_api2_headers(token)
+            st,period,_=request_json(CURSOR_DASHBOARD+"/GetCurrentPeriodUsage",api2,"POST",{})
+    result=None
+    plan=period.get("planUsage") if st==200 and isinstance(period,dict) else None
+    if isinstance(plan,dict) and (plan or period.get("billingCycleEnd")):
+        result=cursor_plan_result(plan, period.get("billingCycleEnd"))
+    if result is None:
+        st,d,_=request_json(CURSOR_BASE+"/api/usage-summary",hdr)
+        if st!=200 or not isinstance(d,dict):return {"status":"error","message":f"HTTP {st or 'ERR'}"}
+        result=cursor_plan_result(((d.get("individualUsage") or {}).get("plan")) or {}, d.get("billingCycleEnd"))
+
     ist,identity,_=request_json(CURSOR_BASE+"/api/auth/me",{**hdr,"Accept":"application/json"})
     email=account_email(identity) if ist==200 else token_email
     if email:result["email"]=email
     elif sub:result["account_id"]=sub
 
-    # 1) Reliable per-model request counts for current billing cycle.
-    # /api/usage?user=<sub> is observed in the Cursor dashboard.
+    st_agg,aggregated,_=request_json(CURSOR_DASHBOARD+"/GetAggregatedUsageEvents",api2,"POST",{})
+    models=models_from_aggregations(aggregated) if st_agg==200 else []
+    if models:
+        result["models"]=sort_cursor_models(models)
+        result["model_source"]="aggregations"
+        return finalize_cursor_result(result)
+
     if sub:
         from urllib.parse import quote
         st2,u,_=request_json(CURSOR_BASE+"/api/usage?user="+quote(sub,safe=""),hdr)
         if st2==200 and isinstance(u,dict):
-            models=[]
-            for name,val in u.items():
-                if name in ("startOfMonth","globalRequests") or not isinstance(val,dict):continue
-                nr=val.get("numRequests")
-                if isinstance(nr,(int,float)) and nr>0:
-                    models.append({"model":name,"requests":nr,"weighted":None,"charged_cents":None,"token_cents":None})
+            models=models_from_legacy_usage(u)
             if models:
-                result["models"]=models
+                result["models"]=sort_cursor_models(models)
                 result["model_source"]="request-counts"
 
-    # 2) Rich event stream: weighted usage + charged/token cents.
-    # Personal accounts use teamId=0, no userId. This is undocumented, so cleanly fall back above.
     eh={**hdr,"Origin":"https://cursor.com","Content-Type":"application/json"}
-    agg={}
-    pages=0
     try:
-        for page in range(1,6):  # bounded: max 500 recent events
-            st3,e,_=request_json(CURSOR_BASE+"/api/dashboard/get-filtered-usage-events",eh,"POST",
-                                 {"teamId":0,"page":page,"pageSize":100})
-            if st3!=200 or not isinstance(e,dict):break
-            events=e.get("usageEventsDisplay") or []
-            if not events:break
+        pages=0; events=[]
+        for page in range(1,6):
+            st3,payload,_=request_json(CURSOR_DASHBOARD+"/GetFilteredUsageEvents",api2,"POST",{"page":page,"pageSize":100})
+            if st3!=200 or not isinstance(payload,dict):
+                st3,payload,_=request_json(CURSOR_BASE+"/api/dashboard/get-filtered-usage-events",eh,"POST",
+                                           {"teamId":0,"page":page,"pageSize":100})
+            if st3!=200 or not isinstance(payload,dict):break
+            batch=payload.get("usageEventsDisplay") or []
+            if not batch:break
             pages+=1
-            for ev in events:
-                if not isinstance(ev,dict):continue
-                m=ev.get("model") or "Unknown"
-                a=agg.setdefault(m,{"model":m,"requests":0,"weighted":0.0,"charged_cents":0.0,"token_cents":0.0})
-                a["requests"]+=1
-                rc=num(ev.get("requestsCosts"))
-                if rc is not None:a["weighted"]+=rc
-                cc=num(ev.get("chargedCents"))
-                if cc is not None:a["charged_cents"]+=cc
-                tc=num((ev.get("tokenUsage") or {}).get("totalCents"))
-                if tc is not None:a["token_cents"]+=tc
-            total=e.get("totalUsageEventsCount")
+            events.extend(batch)
+            total=payload.get("totalUsageEventsCount")
             if isinstance(total,int) and page*100>=total:break
-        if agg:
-            result["models"]=list(agg.values())
+        models=models_from_events(events)
+        if models:
+            result["models"]=sort_cursor_models(models)
             result["model_source"]="events"
             result["events_pages"]=pages
     except Exception:
         pass
-
-    # Sort by best available "consumption" measure.
-    def score(x):
-        return (x.get("weighted") or 0, x.get("charged_cents") or 0, x.get("requests") or 0)
-    result["models"].sort(key=score,reverse=True)
-    return result
+    return finalize_cursor_result(result)
 
 class Bar(tk.Canvas):
     def __init__(self,parent,width=340,height=8):
@@ -598,10 +733,12 @@ class CursorCard(ttk.Frame):
         self.usage_btn.pack(side="left")
 
         self.overall=ttk.Label(self,text="",foreground=SECONDARY_TEXT); self.overall.grid(row=1,column=0,sticky="w",pady=(3,6))
-        ttk.Label(self,text="Cursor Models").grid(row=2,column=0,sticky="w")
+        self.cm_label=ttk.Label(self,text="Cursor Models · Monthly")
+        self.cm_label.grid(row=2,column=0,sticky="w")
         self.cmstat=ttk.Label(self,text="",font=("Segoe UI",10,"bold")); self.cmstat.grid(row=3,column=0,sticky="e")
         self.cmb=Bar(self); self.cmb.grid(row=4,column=0,sticky="ew",pady=(2,6))
-        ttk.Label(self,text="Other Models").grid(row=5,column=0,sticky="w")
+        self.om_label=ttk.Label(self,text="Other Models · Monthly")
+        self.om_label.grid(row=5,column=0,sticky="w")
         self.omstat=ttk.Label(self,text="",font=("Segoe UI",10,"bold")); self.omstat.grid(row=6,column=0,sticky="e")
         self.omb=Bar(self); self.omb.grid(row=7,column=0,sticky="ew",pady=(2,6))
         self.reset=ttk.Label(self,text="",foreground=SECONDARY_TEXT); self.reset.grid(row=8,column=0,sticky="w")
@@ -653,10 +790,28 @@ class CursorCard(ttk.Frame):
     def set(self,d):
         cmu=d.get("cursor_models_used"); omu=d.get("other_models_used"); tot=d.get("total_used")
         cmr=remain(cmu); omr=remain(omu)
-        self.cmstat.config(text=f"{pt(cmu)} used · {pt(cmr)} free"); self.cmb.set(cmr)
-        self.omstat.config(text=f"{pt(omu)} used · {pt(omr)} free"); self.omb.set(omr)
-        self.overall.config(text=f"Overall indicator: {pt(tot)} used · {pt(remain(tot))} remaining" if tot is not None else "Two separate usage pools")
-        self.reset.config(text=reset_text(d.get("reset")) or "Reset: not reported")
+        if cmu is None:
+            self.cm_label.grid_remove(); self.cmstat.grid_remove(); self.cmb.grid_remove()
+        else:
+            self.cm_label.grid(); self.cmstat.grid(); self.cmb.grid()
+            self.cmstat.config(text=f"{pt(cmu)} used · {pt(cmr)} free"); self.cmb.set(cmr)
+        if omu is None:
+            self.om_label.grid_remove(); self.omstat.grid_remove(); self.omb.grid_remove()
+        else:
+            self.om_label.grid(); self.omstat.grid(); self.omb.grid()
+            self.omstat.config(text=f"{pt(omu)} used · {pt(omr)} free"); self.omb.set(omr)
+        pool_count=sum(value is not None for value in (cmu,omu))
+        if tot is not None:
+            overall=f"Monthly included usage · {pt(tot)} used · {pt(remain(tot))} remaining"
+        elif pool_count==2:
+            overall="Two monthly included pools · unused usage does not roll over"
+        elif pool_count==1:
+            overall="Monthly included pool · unused usage does not roll over"
+        else:
+            overall="No monthly pool reported"
+        self.overall.config(text=overall)
+        cycle=reset_text(d.get("reset"))
+        self.reset.config(text=cycle or ("Resets with the Cursor billing cycle" if pool_count else "Reset: not reported"))
 
         models=d.get("models") or []
         for i in self.tree.get_children(): self.tree.delete(i)
@@ -671,7 +826,9 @@ class CursorCard(ttk.Frame):
                 f"{w:.1f}" if isinstance(w,(int,float)) else "—",
                 f"${cost/100:.2f}" if isinstance(cost,(int,float)) and cost>0 else "—"))
 
-        if d.get("model_source")=="events":
+        if d.get("model_source")=="aggregations":
+            self.table_note.config(text="* Current billing-cycle totals from Cursor. Cost is the billed share in cents converted to dollars.")
+        elif d.get("model_source")=="events":
             self.table_note.config(text=f"* latest {d.get('events_pages',0)*100} usage events (max. 500); usage = weighted Cursor billing units.")
         elif d.get("model_source")=="request-counts":
             self.table_note.config(text="* Request counts for the current billing period.")
@@ -791,8 +948,8 @@ class App:
         cursor_remaining=[value for value in cursor_remaining if value is not None]
         cursor_windows=[]
         for window_id,label,key in (
-            ("cursor-models","Cursor Models","cursor_models_used"),
-            ("cursor-other-models","Other Models","other_models_used"),
+            ("cursor-models","Cursor Models · Monthly","cursor_models_used"),
+            ("cursor-other-models","Other Models · Monthly","other_models_used"),
         ):
             if cursor.get(key) is not None:
                 cursor_windows.append({"id":window_id,"label":label,"usedPercent":clamp(cursor.get(key)),"resetsAt":public_reset(cursor.get("reset")),"type":"monthly"})

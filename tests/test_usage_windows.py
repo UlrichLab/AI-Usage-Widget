@@ -7,7 +7,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.usage_windows import normalize_claude_desktop, normalize_claude_usage, normalize_codex_usage
+from src.usage_windows import (
+    normalize_claude_desktop,
+    normalize_claude_usage,
+    normalize_codex_usage,
+    normalize_cursor_usage,
+)
 
 
 ROOT = Path(__file__).parents[1]
@@ -148,14 +153,33 @@ class CodexUsageWindowTests(unittest.TestCase):
                      "primary_window": {"used_percent": 30, "limit_window_seconds": 18000},
                      "secondary_window": {"used_percent": 80, "limit_window_seconds": 604800},
                  }},
+                {"limit_name": "Unused Spark", "metered_feature": "unused_spark",
+                 "rate_limit": {"primary_window": {"used_percent": 0, "limit_window_seconds": 18000}}},
+                {"limit_name": "ChatGPT Reserve", "metered_feature": "chatgpt_reserve",
+                 "rate_limit": {"primary_window": {"used_percent": 12, "limit_window_seconds": 604800}}},
+                {"limit_name": "ChatGPT Reserve", "metered_feature": "chatgpt_reserve_idle",
+                 "rate_limit": {"primary_window": {"used_percent": 0, "limit_window_seconds": 604800}}},
             ],
         })
         labels = [window["label"] for window in result["windows"]]
         self.assertEqual(labels, [
             "5 hours",
-            "GPT-5.3-Codex-Spark · 5 hours",
-            "GPT-5.3-Codex-Spark · Weekly",
+            "GPT 5.3 Codex Spark · 5 hours",
+            "GPT 5.3 Codex Spark · Weekly",
+            "Reserve · Weekly",
         ])
+
+    def test_cursor_shows_only_monthly_pools(self):
+        result = normalize_cursor_usage({
+            "cursor_models_used": 11,
+            "other_models_used": 22,
+            "reset": "2026-10-01T00:00:00Z",
+        })
+        self.assertEqual(
+            [window["label"] for window in result["windows"]],
+            ["Cursor Models · Monthly", "Other Models · Monthly"],
+        )
+        self.assertEqual({window["type"] for window in result["windows"]}, {"monthly"})
 
 
 if __name__ == "__main__":
